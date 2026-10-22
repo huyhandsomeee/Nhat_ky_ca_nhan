@@ -1,0 +1,15 @@
+<%- include('../partials/header') %>
+<section class="auth-wrap">
+  <div class="auth-note"><span class="scribble">Một khoảng nhỏ<br>thuộc về bạn.</span><p>Nơi những suy nghĩ được đặt xuống, từng ngày một.</p></div>
+  <form class="form-panel" action="/auth/register" method="post">
+    <p class="eyebrow">Bắt đầu từ đây</p><h1>Tạo tài khoản</h1>
+    <p class="form-intro">Mỗi trang viết là một phần câu chuyện của bạn.</p>
+    <% if (errors.length) { %><div class="form-errors"><% errors.forEach(error => { %><p><%= error.msg %></p><% }) %></div><% } %>
+    <label>Tên hiển thị<input name="displayName" value="<%= values.displayName || '' %>" maxlength="40" required autocomplete="name"></label>
+    <label>Email<input type="email" name="email" value="<%= values.email || '' %>" required autocomplete="email"></label>
+    <label>Mật khẩu<input type="password" name="password" minlength="8" required autocomplete="new-password"><small>Dùng ít nhất 8 ký tự.</small></label>
+    <button class="button button-primary button-wide" type="submit">Tạo tài khoản</button>
+    <p class="form-switch">Đã có tài khoản? <a href="/auth/login">Đăng nhập</a></p>
+  </form>
+</section>
+<%- include('../partials/footer') %>

@@ -1,0 +1,7 @@
+<%- include('../partials/header') %>
+<section class="page-heading explore-heading"><div><p class="eyebrow">Những câu chuyện được sẻ chia</p><h1>Góc chia sẻ</h1><p class="lead">Đọc những trang viết công khai từ mọi người.</p></div></section>
+<form class="search-form" action="/explore" method="get"><label class="sr-only" for="public-search">Tìm bài công khai</label><input id="public-search" type="search" name="q" value="<%= search || '' %>" placeholder="Tìm bài viết công khai…"><button class="button button-quiet" type="submit">Tìm</button><% if (search) { %><a class="text-link" href="/explore">Xóa tìm kiếm</a><% } %></form>
+<% if (!entries.length) { %><section class="empty-state"><span class="empty-icon">☼</span><h2><%= search ? 'Không tìm thấy bài viết phù hợp' : 'Góc này đang yên ắng' %></h2><p><%= search ? 'Thử một từ khóa khác nhé.' : 'Khi có người chia sẻ bài viết công khai, bạn sẽ thấy chúng ở đây.' %></p></section><% } else { %>
+  <section class="public-grid"><% entries.forEach(entry => { %><article class="public-entry"><div class="public-entry-meta"><span><%= entry.author.displayName %></span><time><%= new Intl.DateTimeFormat('vi-VN', { dateStyle: 'medium' }).format(entry.createdAt) %></time></div><h2><a href="/explore/<%= entry.id %>"><%= entry.title %></a></h2><p><%= entry.content.slice(0, 230) %><%= entry.content.length > 230 ? '…' : '' %></p><a class="text-link" href="/explore/<%= entry.id %>">Đọc bài viết</a></article><% }) %></section>
+<% } %>
+<%- include('../partials/footer') %>
