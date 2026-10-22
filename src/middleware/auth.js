@@ -1,21 +1,11 @@
-const User = require('../models/User');
-
-async function attachUser(req, res, next) {
-  try {
-    res.locals.currentUser = null;
-    res.locals.notice = req.session.notice || null;
-    delete req.session.notice;
-    if (req.session.userId) {
-      req.user = await User.findById(req.session.userId).select('_id displayName email');
-      res.locals.currentUser = req.user;
-    }
-    next();
-  } catch (error) { next(error); }
-}
-
 function requireAuth(req, res, next) {
-  if (!req.user) return res.redirect('/auth/login');
-  next();
+  if (req.isAuthenticated?.()) return next();
+  return res.status(401).json({ error: { code: 'AUTH_REQUIRED', message: 'Hãy đăng nhập để tiếp tục.' } });
 }
 
-module.exports = { attachUser, requireAuth };
+function requireProfile(req, res, next) {
+  if (String(req.user?.displayName || '').trim()) return next();
+  return res.status(403).json({ error: { code: 'PROFILE_SETUP_REQUIRED', message: 'Hãy đặt biệt danh trước khi tiếp tục.' } });
+}
+
+module.exports = { requireAuth, requireProfile };

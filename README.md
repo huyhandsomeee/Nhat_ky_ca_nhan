@@ -1,65 +1,100 @@
-# Trang nhật ký
+# Nhật ký cá nhân
 
-Website nhật ký cá nhân dùng Node.js, Express, EJS và MongoDB. Đây là project mẫu để bạn đọc code, chạy thử rồi phát triển tiếp.
+Website viết và chia sẻ nhật ký, dùng React/Vite, Express và MongoDB. Mỗi người dùng đăng nhập bằng Google, chọn biệt danh riêng, rồi quyết định bài nào chỉ mình xem và bài nào được chia sẻ.
 
-## Tính năng
+## Chức năng
 
-- Đăng ký, đăng nhập và đăng xuất.
-- Tạo, đọc, sửa, xóa bài nhật ký.
-- Chọn bài **Riêng tư** hoặc **Công khai** (mặc định là riêng tư).
-- Đọc bài công khai và bình luận khi đã đăng nhập.
-- Người viết bình luận có thể xóa bình luận của mình; chủ bài có thể xóa bình luận trên bài của họ.
-- Kiểm tra quyền ở phía máy chủ, băm mật khẩu, lưu phiên đăng nhập trong MongoDB.
+- Đăng nhập Google và lưu phiên trong MongoDB bằng cookie `HttpOnly`.
+- Tạo, sửa, xóa bài nhật ký; bài mới mặc định riêng tư.
+- Lưu tiêu đề, nội dung, ngày nhật ký, tâm trạng tùy chọn và các thẻ tự nhập.
+- Tìm bài trong nhật ký cá nhân hoặc trong các bài công khai.
+- Ai cũng đọc được bài công khai; người dùng đăng nhập có thể bình luận.
+- Người viết bình luận có thể xóa bình luận của mình; chủ bài có thể xóa mọi bình luận trên bài.
+- Chuyển bài sang riêng tư sẽ ẩn bài và bình luận với người khác. Xóa bài sẽ xóa các bình luận đi kèm.
 
-## 1. Cài đặt cần có
+## Yêu cầu
 
-- Node.js bản LTS và npm.
-- MongoDB chạy trên máy, hoặc một URI MongoDB Atlas.
+- Node.js 20.19 trở lên.
+- MongoDB local hoặc MongoDB Atlas.
+- OAuth Client ID và Client Secret của ứng dụng Google.
 
-## 2. Cài và chạy
+## Cấu hình local
 
-Mở terminal tại thư mục project:
+1. Cài dependency:
 
-```bash
-npm install
+   ```powershell
+   npm install
+   ```
+
+2. Tạo file `.env` từ mẫu:
+
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+
+3. Trong Google Cloud Console, tạo OAuth client loại Web application. Thêm URI sau vào **Authorized redirect URIs**:
+
+   ```text
+   http://localhost:3000/api/auth/google/callback
+   ```
+
+4. Điền `MONGODB_URI`, `MONGO_DB_NAME`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID` và `GOOGLE_CLIENT_SECRET` trong `.env`. `MONGO_DB_NAME` mặc định là `nhat_ky_ca_nhan_v2`, tách riêng dữ liệu bản React khỏi database của ứng dụng cũ. Khi chạy local, giữ:
+
+   ```text
+   GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
+   FRONTEND_URL=http://localhost:5173
+   ```
+
+Không commit `.env` hoặc thông tin OAuth.
+
+## Chạy ứng dụng
+
+Khi phát triển, mở hai terminal tại thư mục project:
+
+```powershell
+npm run dev:server
 ```
 
-Tạo file cấu hình môi trường từ mẫu:
-
-```bash
-# macOS / Linux
-cp .env.example .env
-
-# Windows PowerShell
-Copy-Item .env.example .env
-```
-
-Mở `.env`, điền `MONGODB_URI` nếu bạn dùng MongoDB Atlas và đổi `SESSION_SECRET` thành chuỗi bí mật riêng. Sau đó chạy:
-
-```bash
+```powershell
 npm run dev
 ```
 
-Mở <http://localhost:3000>. Để chạy mà không tự khởi động lại khi sửa code, dùng `npm start`.
+Mở <http://localhost:5173>. Vite chuyển tiếp `/api` tới Express ở cổng 3000.
 
-## 3. Đọc code theo luồng
+Để chạy bản build bằng một server Express:
 
-1. `server.js`: cấu hình Express, middleware, session, kết nối MongoDB và khai báo router.
-2. `src/models/`: cấu trúc dữ liệu `User`, `Entry`, `Comment` trong MongoDB.
-3. `src/middleware/auth.js`: nạp người dùng hiện tại và chặn trang cần đăng nhập.
-4. `src/routes/auth.js`: đăng ký, đăng nhập, đăng xuất và băm mật khẩu.
-5. `src/routes/entries.js`: CRUD nhật ký cá nhân; truy vấn luôn giới hạn theo chủ bài.
-6. `src/routes/publicEntries.js`: trang công khai và bình luận.
-7. `src/views/`: giao diện EJS; `public/styles.css` điều khiển giao diện responsive.
+```powershell
+npm run build
+npm start
+```
 
-## 4. Thử các luồng chính
+Mở <http://localhost:3000>.
 
-1. Tạo tài khoản rồi viết bài. Mặc định bài chỉ hiển thị với bạn.
-2. Mở bài để sửa hoặc xóa; thử đổi chế độ sang **Mọi người**.
-3. Mở **Góc chia sẻ** ở cửa sổ riêng tư hoặc tài khoản khác và xem bài công khai.
-4. Đăng nhập tài khoản khác, bình luận, rồi thử xóa bình luận của chính mình.
-5. Thử URL của bài riêng tư bằng tài khoản khác: máy chủ sẽ trả về trang không tìm thấy.
+## API chính
 
-## Ghi chú bảo mật
+| Phương thức | Đường dẫn | Mục đích |
+| --- | --- | --- |
+| `GET` | `/api/auth/me` | Trạng thái đăng nhập hiện tại |
+| `GET` | `/api/auth/google` | Bắt đầu đăng nhập Google |
+| `GET` | `/api/auth/google/callback` | Nhận phản hồi OAuth |
+| `PUT` | `/api/auth/profile` | Đặt hoặc đổi biệt danh |
+| `POST` | `/api/auth/logout` | Đăng xuất |
+| `GET`, `POST` | `/api/entries` | Liệt kê/tạo bài của tôi |
+| `GET`, `PUT`, `DELETE` | `/api/entries/:id` | Đọc/sửa/xóa bài của tôi |
+| `DELETE` | `/api/entries/:entryId/comments/:commentId` | Xóa bình luận theo quyền |
+| `GET` | `/api/public/entries` | Tìm và liệt kê bài công khai |
+| `GET` | `/api/public/entries/:id` | Đọc bài công khai cùng bình luận |
+| `POST` | `/api/public/entries/:id/comments` | Bình luận trên bài công khai |
 
-Đây là nền tảng học tập, chưa phải cấu hình triển khai production hoàn chỉnh. Trước khi đưa lên Internet, hãy đặt `SESSION_SECRET` mạnh, bật HTTPS, cấu hình sao lưu MongoDB, thêm bảo vệ CSRF và giới hạn tần suất đăng nhập/bình luận. Không commit file `.env`.
+Các API trả lỗi dưới dạng JSON. API bài riêng tư chỉ trả dữ liệu cho chủ bài; người khác nhận `404` để không tiết lộ bài có tồn tại hay không.
+
+## Kiểm tra
+
+```powershell
+npm test
+npm run build
+```
+
+Test tự động bao gồm kiểm tra dữ liệu bài, ngày tương lai, quyền xem/xóa bình luận và schema MongoDB. Để demo đầy đủ OAuth, MongoDB và giao diện, dùng các bước chạy ứng dụng ở trên.
+
+Ứng dụng này khởi đầu lại schema và không tự chuyển tài khoản/bài viết từ phiên bản EJS cũ.

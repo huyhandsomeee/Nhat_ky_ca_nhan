@@ -1,85 +1,121 @@
 const express = require('express');
-const { body, validationResult } = require('express-validator');
+const mongoose = require('mongoose');
 const Entry = require('../models/Entry');
 const Comment = require('../models/Comment');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireProfile } = require('../middleware/auth');
+const { validateEntryInput, normalizeEntryInput, canDeleteComment } = require('../domain/entryRules');
 
 const router = express.Router();
-router.use(requireAuth);
-
-const entryRules = [
-  body('title').trim().isLength({ min: 1, max: 120 }).withMessage('Tiêu đề cần từ 1 đến 120 ký tự.'),
-  body('content').trim().isLength({ min: 1, max: 10000 }).withMessage('Nội dung không được để trống và tối đa 10.000 ký tự.'),
-  body('visibility').isIn(['private', 'public']).withMessage('Hãy chọn chế độ hiển thị hợp lệ.')
-];
+router.use(requireAuth, requireProfile);
 
 router.get('/', async (req, res, next) => {
   try {
     const search = String(req.query.q || '').trim().slice(0, 100);
     const filter = { author: req.user._id };
-    if (search) filter.$or = [{ title: { $regex: escapeRegex(search), $options: 'i' } }, { content: { $regex: escapeRegex(search), $options: 'i' } }];
-    const entries = await Entry.find(filter).sort({ updatedAt: -1 });
-    res.render('entries/index', { title: 'Nhật ký của tôi', entries, search });
-  } catch (error) { next(error); }
+    if (search) filter.$or = searchConditions(search);
+    const entries = await Entry.find(filter).sort({ journalDate: -1, createdAt: -1 }).limit(50);
+    res.json({ entries, search });
+  } catch (error) {
+    next(error);
+  }
 });
 
-router.get('/new', (req, res) => res.render('entries/form', {
-  title: 'Viết nhật ký', heading: 'Một ngày của bạn thế nào?', action: '/entries', entry: { title: '', content: '', visibility: 'private' }, errors: []
-}));
+router.post('/', async (req, res, next) => {
+  const errors = validateEntryInput(req.body, vietnameseToday());
+  if (errors.length) return validationResponse(res, errors);
 
-router.post('/', entryRules, async (req, res, next) => {
-  const errors = validationResult(req).array();
-  const entry = { title: req.body.title, content: req.body.content, visibility: req.body.visibility };
-  if (errors.length) return res.status(400).render('entries/form', { title: 'Viết nhật ký', heading: 'Một ngày của bạn thế nào?', action: '/entries', entry, errors });
   try {
-    await Entry.create({ ...entry, author: req.user._id });
-    res.redirect('/entries');
-  } catch (error) { next(error); }
-});
-
-router.get('/:id/edit', async (req, res, next) => {
-  try {
-    const entry = await Entry.findOne({ _id: req.params.id, author: req.user._id });
-    if (!entry) return res.status(404).render('errors/404', { title: 'Không tìm thấy bài viết' });
-    res.render('entries/form', { title: 'Sửa nhật ký', heading: 'Chỉnh lại trang viết này', action: `/entries/${entry.id}?_method=PUT`, entry, errors: [] });
-  } catch (error) { next(error); }
-});
-
-router.put('/:id', entryRules, async (req, res, next) => {
-  const errors = validationResult(req).array();
-  const entry = { _id: req.params.id, title: req.body.title, content: req.body.content, visibility: req.body.visibility };
-  if (errors.length) return res.status(400).render('entries/form', { title: 'Sửa nhật ký', heading: 'Chỉnh lại trang viết này', action: `/entries/${req.params.id}?_method=PUT`, entry, errors });
-  try {
-    const updated = await Entry.findOneAndUpdate(
-      { _id: req.params.id, author: req.user._id },
-      { title: entry.title, content: entry.content, visibility: entry.visibility },
-      { new: true, runValidators: true }
-    );
-    if (!updated) return res.status(404).render('errors/404', { title: 'Không tìm thấy bài viết' });
-    res.redirect('/entries');
-  } catch (error) { next(error); }
+    const entry = await Entry.create({ ...normalizeEntryInput(req.body), author: req.user._id });
+    return res.status(201).json({ entry });
+  } catch (error) {
+    return next(error);
+  }
 });
 
 router.get('/:id', async (req, res, next) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
   try {
     const entry = await Entry.findOne({ _id: req.params.id, author: req.user._id });
-    if (!entry) return res.status(404).render('errors/404', { title: 'Không tìm thấy bài viết' });
-    const comments = entry.visibility === 'public'
-      ? await Comment.find({ entry: entry._id }).populate('author', 'displayName').sort({ createdAt: 1 })
-      : [];
-    res.render('entries/show', { title: entry.title, entry, comments, isOwner: true, publicPage: false });
-  } catch (error) { next(error); }
+    if (!entry) return notFound(res);
+    const comments = await Comment.find({ entry: entry._id }).populate('author', 'displayName').sort({ createdAt: 1 });
+    return res.json({ entry, comments });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+router.put('/:id', async (req, res, next) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
+  const errors = validateEntryInput(req.body, vietnameseToday());
+  if (errors.length) return validationResponse(res, errors);
+
+  try {
+    const entry = await Entry.findOneAndUpdate(
+      { _id: req.params.id, author: req.user._id },
+      normalizeEntryInput(req.body),
+      { new: true, runValidators: true }
+    );
+    if (!entry) return notFound(res);
+    return res.json({ entry });
+  } catch (error) {
+    return next(error);
+  }
 });
 
 router.delete('/:id', async (req, res, next) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
   try {
     const entry = await Entry.findOneAndDelete({ _id: req.params.id, author: req.user._id });
-    if (!entry) return res.status(404).render('errors/404', { title: 'Không tìm thấy bài viết' });
+    if (!entry) return notFound(res);
     await Comment.deleteMany({ entry: entry._id });
-    res.redirect('/entries');
-  } catch (error) { next(error); }
+    return res.status(204).end();
+  } catch (error) {
+    return next(error);
+  }
 });
 
-module.exports = router;
+router.delete('/:entryId/comments/:commentId', async (req, res, next) => {
+  if (!mongoose.isValidObjectId(req.params.entryId) || !mongoose.isValidObjectId(req.params.commentId)) return notFound(res);
+  try {
+    const entry = await Entry.findById(req.params.entryId);
+    if (!entry) return notFound(res);
+    const comment = await Comment.findOne({ _id: req.params.commentId, entry: entry._id });
+    if (!comment) return notFound(res);
 
-function escapeRegex(value) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+    if (!canDeleteComment(comment, entry, req.user._id)) {
+      if (entry.visibility === 'private') return notFound(res);
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Bạn không có quyền xóa bình luận này.' } });
+    }
+    await comment.deleteOne();
+    return res.status(204).end();
+  } catch (error) {
+    return next(error);
+  }
+});
+
+function validationResponse(res, errors) {
+  return res.status(400).json({
+    error: {
+      code: 'VALIDATION_ERROR',
+      message: 'Hãy kiểm tra lại các trường đã nhập.',
+      fields: Object.fromEntries(errors.map((error) => [error.field, error.message]))
+    }
+  });
+}
+
+function searchConditions(search) {
+  const pattern = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return [{ title: { $regex: pattern, $options: 'i' } }, { content: { $regex: pattern, $options: 'i' } }];
+}
+
+function notFound(res) {
+  return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Không tìm thấy bài viết.' } });
+}
+
+function vietnameseToday(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit'
+  }).format(now);
+}
+
+module.exports = router;

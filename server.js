@@ -5,73 +5,88 @@ const mongoose = require('mongoose');
 const session = require('express-session');
 const MongoStore = require('connect-mongo');
 const helmet = require('helmet');
-const methodOverride = require('method-override');
+const passport = require('passport');
+const fs = require('fs');
 const path = require('path');
+const { configurePassport } = require('./src/auth/passport');
 
-const authRoutes = require('./src/routes/auth');
+const authRoutes = require('./src/routes/apiAuth');
 const entryRoutes = require('./src/routes/entries');
-const { attachUser } = require('./src/middleware/auth');
+const publicEntryRoutes = require('./src/routes/publicEntries');
 
-const app = express();
-const port = process.env.PORT || 3000;
+function createApp(options) {
+  configurePassport();
 
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'src/views'));
-app.use(helmet());
-app.use(express.urlencoded({ extended: false, limit: '20kb' }));
-app.use(methodOverride('_method'));
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(session({
-  name: 'nhatky.sid',
-  secret: process.env.SESSION_SECRET || 'development-secret-please-change',
-  resave: false,
-  saveUninitialized: false,
-  store: MongoStore.create({ mongoUrl: process.env.MONGODB_URI }),
-  cookie: {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 7 * 24 * 60 * 60 * 1000
+  const app = express();
+  const frontendDist = path.join(__dirname, 'dist');
+  const mongoDbName = process.env.MONGO_DB_NAME || 'nhat_ky_ca_nhan_v2';
+  const sessionStore = options?.sessionStore || MongoStore.create({ mongoUrl: process.env.MONGODB_URI, dbName: mongoDbName, collectionName: 'sessions' });
+  const sessionSecret = process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'local-development-secret-change-this');
+  if (!sessionSecret) throw new Error('SESSION_SECRET is required in production.');
+  if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
+
+  app.disable('x-powered-by');
+  app.use(helmet());
+  app.use(express.json({ limit: '40kb' }));
+  app.use(session({
+    name: 'nhatky.sid',
+    secret: sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    store: sessionStore,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    }
+  }));
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+  app.use('/api/auth', authRoutes);
+  app.use('/api/entries', entryRoutes);
+  app.use('/api/public/entries', publicEntryRoutes);
+  app.use('/api', (_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Không tìm thấy API.' } }));
+
+  if (fs.existsSync(frontendDist)) {
+    app.use(express.static(frontendDist, { index: false }));
+    app.get('*', (req, res, next) => {
+      if (path.extname(req.path)) return next();
+      return res.sendFile(path.join(frontendDist, 'index.html'));
+    });
+  } else {
+    app.get('/', (_req, res) => res.status(503).type('text').send('Frontend chưa được build. Chạy npm run build trước khi dùng npm start.'));
   }
-}));
-app.use(attachUser);
 
-app.get('/', (req, res) => res.redirect(req.user ? '/entries' : '/explore'));
-app.use('/auth', authRoutes);
-app.use('/entries', entryRoutes);
-
-app.get('/explore', async (req, res, next) => {
-  try {
-    const Entry = require('./src/models/Entry');
-    const search = String(req.query.q || '').trim().slice(0, 100);
-    const filter = { visibility: 'public' };
-    if (search) filter.$or = [
-      { title: { $regex: escapeRegex(search), $options: 'i' } },
-      { content: { $regex: escapeRegex(search), $options: 'i' } }
-    ];
-    const entries = await Entry.find(filter)
-      .populate('author', 'displayName')
-      .sort({ createdAt: -1 })
-      .limit(30);
-    res.render('explore/index', { title: 'Bài viết công khai', entries, search });
-  } catch (error) { next(error); }
-});
-
-app.use('/explore', require('./src/routes/publicEntries'));
-
-app.use((req, res) => res.status(404).render('errors/404', { title: 'Không tìm thấy trang' }));
-app.use((error, req, res, next) => {
-  console.error(error);
-  res.status(500).render('errors/500', { title: 'Có lỗi xảy ra' });
-});
-
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => {
-    app.listen(port, () => console.log(`Nhật ký đang chạy tại http://localhost:${port}`));
-  })
-  .catch((error) => {
-    console.error('Không thể kết nối MongoDB:', error.message);
-    process.exit(1);
+  app.use((error, _req, res, _next) => {
+    console.error(error);
+    if (res.headersSent) return;
+    const status = error.name === 'ValidationError' ? 400 : 500;
+    return res.status(status).json({
+      error: {
+        code: status === 400 ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR',
+        message: status === 400 ? 'Dữ liệu không hợp lệ.' : 'Máy chủ gặp lỗi. Hãy thử lại sau.'
+      }
+    });
   });
 
-function escapeRegex(value) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  return app;
+}
+
+async function startServer() {
+  if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is required. Copy .env.example to .env and configure MongoDB.');
+  await mongoose.connect(process.env.MONGODB_URI, { dbName: process.env.MONGO_DB_NAME || 'nhat_ky_ca_nhan_v2' });
+  const port = Number(process.env.PORT || 3000);
+  createApp().listen(port, () => console.log(`Nhật ký đang chạy tại http://localhost:${port}`));
+}
+
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error('Không thể khởi động Nhật ký:', error.message);
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { createApp, startServer };
