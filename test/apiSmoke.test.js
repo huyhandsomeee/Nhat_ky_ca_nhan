@@ -22,4 +22,20 @@ test('API reports session state and protects personal journal routes', async (t)
   const protectedRequest = await fetch(`${baseUrl}/api/entries`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
   assert.equal(protectedRequest.status, 401);
   assert.equal((await protectedRequest.json()).error.code, 'AUTH_REQUIRED');
+
+  const invalidRegister = await fetch(`${baseUrl}/api/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'a', password: '123' })
+  });
+  assert.equal(invalidRegister.status, 400);
+  assert.equal((await invalidRegister.json()).error.code, 'VALIDATION_ERROR');
+
+  const invalidLogin = await fetch(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({})
+  });
+  assert.equal(invalidLogin.status, 400);
+  assert.equal((await invalidLogin.json()).error.code, 'VALIDATION_ERROR');
 });

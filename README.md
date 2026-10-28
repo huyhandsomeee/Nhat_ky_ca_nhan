@@ -1,10 +1,11 @@
 # Nhật ký cá nhân
 
-Website viết và chia sẻ nhật ký, dùng React/Vite, Express và MongoDB. Mỗi người dùng đăng nhập bằng Google, chọn biệt danh riêng, rồi quyết định bài nào chỉ mình xem và bài nào được chia sẻ.
+Website viết và chia sẻ nhật ký, dùng React/Vite, Express và MongoDB. Người dùng có thể đăng ký tài khoản bằng tên đăng nhập & mật khẩu, chọn biệt danh riêng, rồi quyết định bài nào chỉ mình xem và bài nào được chia sẻ.
 
 ## Chức năng
 
-- Đăng nhập Google và lưu phiên trong MongoDB bằng cookie `HttpOnly`.
+- Đăng ký, đăng nhập và đặt lại mật khẩu với tài khoản tên đăng nhập & mật khẩu được mã hóa an toàn (bcrypt).
+- Lưu phiên làm việc trong MongoDB bằng cookie `HttpOnly`.
 - Tạo, sửa, xóa bài nhật ký; bài mới mặc định riêng tư.
 - Lưu tiêu đề, nội dung, ngày nhật ký, tâm trạng tùy chọn và các thẻ tự nhập.
 - Tìm bài trong nhật ký cá nhân hoặc trong các bài công khai.
@@ -16,7 +17,6 @@ Website viết và chia sẻ nhật ký, dùng React/Vite, Express và MongoDB. 
 
 - Node.js 20.19 trở lên.
 - MongoDB local hoặc MongoDB Atlas.
-- OAuth Client ID và Client Secret của ứng dụng Google.
 
 ## Cấu hình local
 
@@ -26,26 +26,16 @@ Website viết và chia sẻ nhật ký, dùng React/Vite, Express và MongoDB. 
    npm install
    ```
 
-2. Tạo file `.env` từ mẫu:
+2. Cấu hình file `.env`:
 
-   ```powershell
-   Copy-Item .env.example .env
-   ```
-
-3. Trong Google Cloud Console, tạo OAuth client loại Web application. Thêm URI sau vào **Authorized redirect URIs**:
-
-   ```text
-   http://localhost:3000/api/auth/google/callback
-   ```
-
-4. Điền `MONGODB_URI`, `MONGO_DB_NAME`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID` và `GOOGLE_CLIENT_SECRET` trong `.env`. `MONGO_DB_NAME` mặc định là `nhat_ky_ca_nhan_v2`, tách riêng dữ liệu bản React khỏi database của ứng dụng cũ. Khi chạy local, giữ:
-
-   ```text
-   GOOGLE_CALLBACK_URL=http://localhost:3000/api/auth/google/callback
+   ```env
+   PORT=3000
+   MONGODB_URI=mongodb://127.0.0.1:27017/nhat_ky_ca_nhan
+   MONGO_DB_NAME=nhat_ky_ca_nhan
+   SESSION_SECRET=thay-bang-mot-chuoi-bi-mat-dai-va-ngau-nhien
+   NODE_ENV=development
    FRONTEND_URL=http://localhost:5173
    ```
-
-Không commit `.env` hoặc thông tin OAuth.
 
 ## Chạy ứng dụng
 
@@ -75,8 +65,9 @@ Mở <http://localhost:3000>.
 | Phương thức | Đường dẫn | Mục đích |
 | --- | --- | --- |
 | `GET` | `/api/auth/me` | Trạng thái đăng nhập hiện tại |
-| `GET` | `/api/auth/google` | Bắt đầu đăng nhập Google |
-| `GET` | `/api/auth/google/callback` | Nhận phản hồi OAuth |
+| `POST` | `/api/auth/register` | Đăng ký tài khoản mới |
+| `POST` | `/api/auth/login` | Đăng nhập tài khoản |
+| `POST` | `/api/auth/reset-password` | Đặt lại / Đăng ký lại mật khẩu |
 | `PUT` | `/api/auth/profile` | Đặt hoặc đổi biệt danh |
 | `POST` | `/api/auth/logout` | Đăng xuất |
 | `GET`, `POST` | `/api/entries` | Liệt kê/tạo bài của tôi |
@@ -94,7 +85,3 @@ Các API trả lỗi dưới dạng JSON. API bài riêng tư chỉ trả dữ l
 npm test
 npm run build
 ```
-
-Test tự động bao gồm kiểm tra dữ liệu bài, ngày tương lai, quyền xem/xóa bình luận và schema MongoDB. Để demo đầy đủ OAuth, MongoDB và giao diện, dùng các bước chạy ứng dụng ở trên.
-
-Ứng dụng này khởi đầu lại schema và không tự chuyển tài khoản/bài viết từ phiên bản EJS cũ.

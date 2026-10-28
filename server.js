@@ -75,9 +75,24 @@ function createApp(options) {
   return app;
 }
 
+async function cleanLegacyIndexes() {
+  try {
+    const userColl = mongoose.connection.collection('users');
+    const indexes = await userColl.indexes();
+    for (const idx of indexes) {
+      if (idx.name === 'googleId_1' || idx.name === 'email_1') {
+        await userColl.dropIndex(idx.name).catch(() => {});
+      }
+    }
+  } catch {
+    // Collection might not exist yet
+  }
+}
+
 async function startServer() {
   if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is required. Copy .env.example to .env and configure MongoDB.');
-  await mongoose.connect(process.env.MONGODB_URI, { dbName: process.env.MONGO_DB_NAME || 'nhat_ky_ca_nhan_v2' });
+  await mongoose.connect(process.env.MONGODB_URI, { dbName: process.env.MONGO_DB_NAME || 'nhat_ky_ca_nhan' });
+  await cleanLegacyIndexes();
   const port = Number(process.env.PORT || 3000);
   createApp().listen(port, () => console.log(`Nhật ký đang chạy tại http://localhost:${port}`));
 }

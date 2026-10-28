@@ -188,14 +188,22 @@ h1, h2, h3 { color: var(--ink); }
 .login-mark { display: block; margin-bottom: 25px; color: var(--moss); font-size: 25px; }
 .login-note h1 { margin: 0; font-size: clamp(34px, 4vw, 46px); font-weight: 500; letter-spacing: -.045em; line-height: 1.15; }
 .login-note > p:last-child { max-width: 360px; margin: 17px 0 0; color: var(--muted); font-size: 14px; line-height: 1.75; }
-.login-panel { max-width: 380px; border-left: 1px solid var(--line); padding: 25px 0 25px clamp(25px, 5vw, 65px); }
+.login-panel { max-width: 440px; border-left: 1px solid var(--line); padding: 25px 0 25px clamp(25px, 5vw, 65px); }
 .login-panel .eyebrow { margin-bottom: 8px; }
-.login-panel h2 { margin: 0; font-size: 25px; font-weight: 500; letter-spacing: -.035em; }
-.login-panel > p:not(.eyebrow) { margin: 9px 0 23px; color: var(--muted); font-size: 12px; }
-.google-button { display: flex; min-height: 46px; align-items: center; justify-content: center; gap: 12px; border: 1px solid #bcc9c1; border-radius: 3px; background: var(--paper); color: var(--ink); font-size: 13px; font-weight: 600; transition: border .15s ease, background .15s ease; }
-.google-button:hover { border-color: var(--moss); background: #fff; }
-.google-button svg { width: 18px; height: 18px; }
-.login-panel > small { display: block; margin-top: 16px; color: var(--muted); font-size: 10px; line-height: 1.6; }
+.login-panel h2 { margin: 0; font-size: 28px; font-weight: 500; letter-spacing: -.035em; color: var(--ink); }
+.auth-desc { margin: 8px 0 22px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.auth-form { display: grid; gap: 16px; }
+.auth-submit-btn { width: 100%; min-height: 46px; margin-top: 8px; font-size: 14px; }
+.auth-switch-links { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); line-height: 1.8; }
+.auth-switch-links p { margin: 4px 0 0; }
+.text-link-btn { border: 0; padding: 0; background: transparent; color: var(--moss-deep); font-size: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.text-link-btn:hover { color: #1e3629; }
+.text-link-btn.text-muted { color: var(--muted); font-weight: 400; }
+.text-link-btn.text-muted:hover { color: var(--ink); }
+.inline-success { margin: 14px 0; border-left: 3px solid #55745d; padding: 11px 13px; background: #f0f7f1; color: var(--moss-deep); font-size: 13px; line-height: 1.5; }
+.auth-note { display: block; margin-top: 14px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+
+
 
 @media (max-width: 760px) {
   .site-header { height: 72px; grid-template-columns: 1fr auto; padding: 0 22px; }

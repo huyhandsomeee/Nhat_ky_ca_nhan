@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const bcrypt = require('bcryptjs');
 const Entry = require('../src/models/Entry');
 const User = require('../src/models/User');
 const Comment = require('../src/models/Comment');
@@ -33,14 +34,18 @@ test('entry documents reject unsupported moods and visibility values', () => {
   assert.ok(error.errors.visibility);
 });
 
-test('users use Google identity and a private user-selected display name', () => {
-  const user = new User({ googleId: 'google-subject-1', email: 'user@example.com', displayName: 'Tên riêng' });
+test('users use username, password and a private user-selected display name', async () => {
+  const hash = await bcrypt.hash('secret123', 10);
+  const user = new User({ username: 'huy123', password: hash, displayName: 'Huy' });
 
   assert.equal(user.validateSync(), undefined);
-  assert.equal(user.passwordHash, undefined);
+  assert.equal(user.username, 'huy123');
+  assert.equal(user.displayName, 'Huy');
+  assert.equal(await user.comparePassword('secret123'), true);
+  assert.equal(await user.comparePassword('wrong-secret'), false);
 });
 
-test('comments belong to both an entry and a Google-authenticated user', () => {
+test('comments belong to both an entry and an authenticated user', () => {
   const comment = new Comment({
     content: 'Cảm ơn bạn đã chia sẻ.',
     entry: '507f1f77bcf86cd799439011',
