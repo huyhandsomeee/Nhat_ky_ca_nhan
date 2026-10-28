@@ -23,6 +23,12 @@ test('API reports session state and protects personal journal routes', async (t)
   assert.equal(protectedRequest.status, 401);
   assert.equal((await protectedRequest.json()).error.code, 'AUTH_REQUIRED');
 
+  for (const path of ['/api/community/users?q=mai', '/api/community/draft', '/api/community/events']) {
+    const response = await fetch(`${baseUrl}${path}`);
+    assert.equal(response.status, 401, `${path} requires authentication`);
+    assert.equal((await response.json()).error.code, 'AUTH_REQUIRED');
+  }
+
   const invalidRegister = await fetch(`${baseUrl}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

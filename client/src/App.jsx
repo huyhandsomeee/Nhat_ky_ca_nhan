@@ -1,7 +1,10 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { api, jsonBody } from './api';
 import { canComment } from './commentPermissions.mjs';
+
+const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
+const MOOD_EMOJI = { 'vui': '😊', 'biết ơn': '🙏', 'bình yên': '😌', 'bình thường': '🙂', 'buồn': '😔', 'lo lắng': '😟', 'tức giận': '😠', 'mệt mỏi': '😴' };
 
 const AuthContext = createContext(null);
 const MOODS = ['vui', 'biết ơn', 'bình yên', 'bình thường', 'buồn', 'lo lắng', 'tức giận', 'mệt mỏi'];
@@ -75,6 +78,7 @@ function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/setup-profile" element={<PrivateRoute><ProfileSetupPage /></PrivateRoute>} />
         <Route path="/my-diary" element={<PrivateRoute><MyDiaryPage /></PrivateRoute>} />
+        <Route path="/community" element={<PrivateRoute><CommunityPage /></PrivateRoute>} />
         <Route path="/entries/new" element={<PrivateRoute><EntryFormPage /></PrivateRoute>} />
         <Route path="/entries/:id/edit" element={<PrivateRoute><EntryFormPage /></PrivateRoute>} />
         <Route path="/entries/:id" element={<PrivateRoute><EntryDetailPage /></PrivateRoute>} />
@@ -98,6 +102,18 @@ function Header() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const [logoutError, setLogoutError] = useState('');
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    if (!user || user.needsProfileSetup) { setUnreadCount(0); return; }
+    let active = true;
+    api('/api/community/notifications').then((data) => { if (active) setUnreadCount(data.unreadCount || 0); }).catch(() => {});
+    const events = new EventSource('/api/community/events');
+    events.addEventListener('notification:new', () => setUnreadCount((count) => count + 1));
+    const clearUnread = () => setUnreadCount(0);
+    window.addEventListener('community:notifications-read', clearUnread);
+    return () => { active = false; events.close(); window.removeEventListener('community:notifications-read', clearUnread); };
+  }, [user?.id, user?.needsProfileSetup]);
 
   async function handleLogout() {
     setLogoutError('');
@@ -118,6 +134,7 @@ function Header() {
       <nav className="main-nav" aria-label="Điều hướng chính">
         <Link to="/explore">Góc chia sẻ</Link>
         {user && !user.needsProfileSetup && <Link to="/my-diary">Sổ của tôi</Link>}
+        {user && !user.needsProfileSetup && <Link to="/community">Cộng đồng{unreadCount > 0 && <span className="nav-badge">{unreadCount > 99 ? '99+' : unreadCount}</span>}</Link>}
       </nav>
       <div className="header-actions">
         {!loading && (user
@@ -224,6 +241,165 @@ function MyDiaryPage() {
   </>;
 }
 
+function CommunityPage() {
+  const { user } = useAuth();
+  const [query, setQuery] = useState('');
+  const [users, setUsers] = useState([]);
+  const [friends, setFriends] = useState([]);
+  const [requests, setRequests] = useState({ incoming: [], outgoing: [] });
+  const [conversations, setConversations] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+  const [blocks, setBlocks] = useState([]);
+  const [activeConversation, setActiveConversation] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [messageText, setMessageText] = useState('');
+  const [error, setError] = useState('');
+  const [searching, setSearching] = useState(false);
+
+  async function loadCommunity() {
+    const [friendData, requestData, conversationData, notificationData, blockData] = await Promise.all([
+      api('/api/community/friends'), api('/api/community/requests'), api('/api/community/conversations'),
+      api('/api/community/notifications'), api('/api/community/blocks')
+    ]);
+    setFriends(friendData.friends);
+    setRequests(requestData);
+    setConversations(conversationData.conversations);
+    setNotifications(notificationData.notifications);
+    setBlocks(blockData.blocks);
+  }
+
+  useEffect(() => { loadCommunity().catch((reason) => setError(reason.message)); }, []);
+
+  useEffect(() => {
+    const normalized = query.trim();
+    if (normalized.length < 2) { setUsers([]); setSearching(false); return; }
+    let active = true;
+    setSearching(true);
+    const timer = setTimeout(() => api(`/api/community/users?q=${encodeURIComponent(normalized)}`)
+      .then((data) => { if (active) { setUsers(data.users); setSearching(false); } })
+      .catch((reason) => { if (active) { setError(reason.message); setSearching(false); } }), 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [query]);
+
+  useEffect(() => {
+    const events = new EventSource('/api/community/events');
+    events.addEventListener('message:new', (event) => {
+      const data = JSON.parse(event.data);
+      if (activeConversation?._id === data.conversationId) setMessages((current) => current.some((item) => item._id === data.message._id) ? current : [...current, data.message]);
+      loadCommunity().catch(() => {});
+    });
+    events.addEventListener('notification:new', () => loadCommunity().catch(() => {}));
+    return () => events.close();
+  }, [activeConversation?._id]);
+
+  useEffect(() => {
+    if (!activeConversation?._id) return;
+    let active = true;
+    api(`/api/community/conversations/${activeConversation._id}/messages`)
+      .then((data) => { if (active) setMessages(data.messages); })
+      .catch((reason) => { if (active) setError(reason.message); });
+    return () => { active = false; };
+  }, [activeConversation?._id]);
+
+  async function run(action) {
+    setError('');
+    try { await action(); await loadCommunity(); }
+    catch (reason) { setError(reason.message); }
+  }
+
+  async function acceptRequest(id) { await run(() => api(`/api/community/requests/${id}/accept`, { method: 'POST' })); }
+  async function declineRequest(id) { await run(() => api(`/api/community/requests/${id}`, { method: 'DELETE' })); }
+
+  async function openConversation(friend) {
+    setError('');
+    try {
+      const { conversation } = await api(`/api/community/conversations/${friend._id}`, { method: 'POST' });
+      setActiveConversation({ _id: conversation._id, user: friend });
+    } catch (reason) { setError(reason.message); }
+  }
+
+  async function blockActiveUser() {
+    if (!activeConversation) return;
+    const blockedId = activeConversation.user._id;
+    try {
+      await api(`/api/community/blocks/${blockedId}`, { method: 'POST' });
+      setActiveConversation(null);
+      setMessages([]);
+      await loadCommunity();
+    } catch (reason) { setError(reason.message); }
+  }
+
+  async function sendMessage(event) {
+    event.preventDefault();
+    if (!activeConversation || !messageText.trim()) return;
+    try {
+      const { message } = await api(`/api/community/conversations/${activeConversation._id}/messages`, { method: 'POST', body: jsonBody({ content: messageText }) });
+      setMessages((current) => [...current, message]);
+      setMessageText('');
+    } catch (reason) { setError(reason.message); }
+  }
+
+  async function markNotificationsRead() {
+    await api('/api/community/notifications/read', { method: 'POST' });
+    window.dispatchEvent(new Event('community:notifications-read'));
+  }
+
+  return <section className="community-page">
+    <div className="diary-heading community-heading"><div><p className="eyebrow">Không gian kết nối</p><h1>Những người bạn mới.</h1><p className="intro-description">Chia sẻ câu chuyện công khai và trò chuyện với những người bạn đã kết nối.</p></div></div>
+    {error && <InlineError message={error} />}
+    <div className="community-grid">
+      <div className="community-sidebar">
+        <section className="community-card">
+          <p className="eyebrow">Tìm bạn</p><h2>Tìm theo tên người dùng</h2>
+          <div className="community-search"><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Nhập tên người dùng" minLength={2} /><span className="community-hint">Nhập ít nhất 2 ký tự</span></div>
+          {searching && <p className="community-hint">Đang tìm…</p>}
+          {users.map((person) => <div className="community-person" key={person._id}><div><strong>{person.displayName || person.username}</strong><small>@{person.username}</small></div><button className="text-button" onClick={() => run(() => api('/api/community/requests', { method: 'POST', body: jsonBody({ username: person.username }) }))}>＋ Mời</button></div>)}
+          {query.trim().length >= 2 && !searching && !users.length && <p className="community-hint">Không tìm thấy tài khoản phù hợp.</p>}
+        </section>
+
+        <section className="community-card">
+          <p className="eyebrow">Lời mời đến <span className="count-pill">{requests.incoming.length}</span></p>
+          {requests.incoming.length ? requests.incoming.map((request) => <div className="community-person" key={request._id}><div><strong>{request.sender?.displayName || request.sender?.username}</strong><small>@{request.sender?.username}</small></div><div className="person-actions"><button className="text-button" onClick={() => acceptRequest(request._id)}>Chấp nhận</button><button className="text-button danger-text" onClick={() => declineRequest(request._id)}>Từ chối</button></div></div>) : <p className="community-hint">Chưa có lời mời nào.</p>}
+          {!!requests.outgoing.length && <p className="community-hint">Đang chờ {requests.outgoing.length} lời mời bạn gửi.</p>}
+        </section>
+
+        <section className="community-card">
+          <p className="eyebrow">Thông báo <span className="count-pill">{notifications.filter((item) => !item.readAt).length}</span></p>
+          {!!notifications.some((item) => !item.readAt) && <button className="text-button" onClick={() => run(markNotificationsRead)}>Đánh dấu đã đọc</button>}
+          {notifications.slice(0, 5).map((item) => <p className={`notification-line ${item.readAt ? '' : 'unread'}`} key={item._id}>{item.type === 'message' ? 'Tin nhắn mới từ' : item.type === 'friend_request' ? 'Lời mời kết bạn từ' : 'Đã trở thành bạn với'} <strong>{item.actor?.displayName || item.actor?.username}</strong></p>)}
+          {!notifications.length && <p className="community-hint">Thông báo mới sẽ xuất hiện ở đây.</p>}
+        </section>
+
+        <section className="community-card">
+          <p className="eyebrow">Đã chặn</p>
+          {blocks.map((item) => <div className="community-person" key={item._id}><div><strong>{item.blocked?.displayName || item.blocked?.username}</strong><small>@{item.blocked?.username}</small></div><button className="text-button" onClick={() => run(() => api(`/api/community/blocks/${item.blocked?._id}`, { method: 'DELETE' }))}>Bỏ chặn</button></div>)}
+          {!blocks.length && <p className="community-hint">Bạn chưa chặn tài khoản nào.</p>}
+        </section>
+      </div>
+
+      <section className="community-card friends-card">
+        <div className="community-card-heading"><div><p className="eyebrow">Bạn bè <span className="count-pill">{friends.length}</span></p><h2>Hộp thư</h2></div></div>
+        <div className="messenger-layout">
+          <div className="conversation-list">
+            {friends.map((friend) => {
+              const conversation = conversations.find((item) => String(item.user?._id) === String(friend._id));
+              return <button className={`conversation-item ${activeConversation?.user?._id === friend._id ? 'active' : ''}`} key={friend._id} onClick={() => openConversation(friend)}><span className="comment-avatar">{(friend.displayName || friend.username).slice(0, 1).toUpperCase()}</span><span><strong>{friend.displayName || friend.username}</strong><small>{conversation?.lastMessage?.content || `@${friend.username}`}</small></span></button>;
+            })}
+            {!friends.length && <p className="community-hint">Khi lời mời được chấp nhận, bạn bè sẽ xuất hiện ở đây.</p>}
+          </div>
+          <div className="chat-panel">
+            {activeConversation ? <>
+              <div className="chat-heading"><div><p className="eyebrow">Đang trò chuyện</p><strong>{activeConversation.user.displayName || activeConversation.user.username}</strong></div><button className="text-button danger-text" onClick={blockActiveUser}>Chặn</button></div>
+              <div className="chat-messages">{messages.map((message) => <div className={`chat-bubble ${String(message.sender?._id || message.sender) === String(user.id) ? 'mine' : ''}`} key={message._id}><p>{message.content}</p><time>{formatTimestamp(message.createdAt)}</time></div>)}{!messages.length && <p className="community-hint">Gửi lời chào đầu tiên nhé.</p>}</div>
+              <form className="chat-compose" onSubmit={sendMessage}><textarea value={messageText} onChange={(event) => setMessageText(event.target.value)} maxLength={5000} rows={2} placeholder="Viết tin nhắn…" required /><button className="button button-small" disabled={!messageText.trim()}>Gửi</button></form>
+            </> : <div className="chat-empty"><span aria-hidden="true">✉</span><h3>Chọn một người bạn</h3><p>Tin nhắn chỉ hiển thị với hai người trong cuộc trò chuyện.</p></div>}
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>;
+}
+
 function EntryList({ entries, publicPage = false }) {
   return <div className="entry-list">{entries.map((entry) => <EntryRow key={entry._id} entry={entry} publicPage={publicPage} />)}</div>;
 }
@@ -253,6 +429,8 @@ function EntryDetailPage({ publicPage = false }) {
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [commentText, setCommentText] = useState('');
+  const [replyTarget, setReplyTarget] = useState(null);
+  const [replyText, setReplyText] = useState('');
   const [commentError, setCommentError] = useState('');
   const [commenting, setCommenting] = useState(false);
 
@@ -285,6 +463,28 @@ function EntryDetailPage({ publicPage = false }) {
     } finally {
       setCommenting(false);
     }
+  }
+
+  async function submitReply(event) {
+    event.preventDefault();
+    if (!replyTarget) return;
+    setCommentError('');
+    try {
+      await api(`/api/public/entries/${id}/comments`, { method: 'POST', body: jsonBody({ content: replyText, parentComment: replyTarget }) });
+      setReplyText('');
+      setReplyTarget(null);
+      await loadEntry();
+    } catch (reason) { setCommentError(reason.message); }
+  }
+
+  async function toggleReaction(comment, emoji) {
+    try {
+      const own = comment.reactions?.find((reaction) => String(reaction.user?._id || reaction.user) === String(user?.id));
+      const { comment: updated } = await api(`/api/public/entries/${id}/comments/${comment._id}/reactions`, {
+        method: 'POST', body: jsonBody({ emoji: own?.emoji === emoji ? null : emoji })
+      });
+      setComments((current) => current.map((item) => item._id === comment._id ? updated : item));
+    } catch (reason) { setCommentError(reason.message); }
   }
 
   async function deleteComment(commentId) {
@@ -334,17 +534,29 @@ function EntryDetailPage({ publicPage = false }) {
       {comments.length ? <div className="comment-list">{comments.map((comment) => {
         const commenterId = comment.author?._id || comment.author;
         const canDelete = user && (String(user.id) === String(commenterId) || isOwner);
+        const parent = comments.find((item) => item._id === String(comment.parentComment?._id || comment.parentComment));
+        const depth = parent ? Math.min(4, 1 + getCommentDepth(parent, comments)) : 0;
+        const ownReaction = comment.reactions?.find((reaction) => String(reaction.user?._id || reaction.user) === String(user?.id));
+        const reactionCounts = REACTIONS.map((emoji) => ({ emoji, count: comment.reactions?.filter((reaction) => reaction.emoji === emoji).length || 0 })).filter((item) => item.count);
         return <article className="comment" key={comment._id}>
           <div className="comment-avatar" aria-hidden="true">{(comment.author?.displayName || '?').slice(0, 1).toUpperCase()}</div>
-          <div className="comment-main"><div className="comment-byline"><strong>{comment.author?.displayName || 'Người viết'}</strong><time>{formatTimestamp(comment.createdAt)}</time>{canDelete && <button className="text-button comment-delete" onClick={() => deleteComment(comment._id)}>Xóa</button>}</div><p>{comment.content}</p></div>
+          <div className={`comment-main ${depth ? 'comment-reply' : ''}`} style={depth ? { marginLeft: `${Math.min(depth, 3) * 18}px` } : undefined}>
+            <div className="comment-byline"><strong>{comment.deleted ? 'Người viết' : comment.author?.displayName || 'Người viết'}</strong><time>{formatTimestamp(comment.createdAt)}</time>{canDelete && !comment.deleted && <button className="text-button comment-delete" onClick={() => deleteComment(comment._id)}>Xóa</button>}</div>
+            <p>{comment.content}</p>
+            <div className="comment-actions">
+              {publicPage && canComment(user) && !comment.deleted && <><button className="text-button" onClick={() => { setReplyTarget(replyTarget === comment._id ? null : comment._id); setReplyText(''); }}>↩ Trả lời</button><div className="reaction-picker">{REACTIONS.map((emoji) => <button key={emoji} aria-label={`Thả ${emoji}`} title={emoji} className={`reaction-button ${ownReaction?.emoji === emoji ? 'selected' : ''}`} onClick={() => toggleReaction(comment, emoji)}>{emoji}</button>)}</div></>}
+              {!!reactionCounts.length && <div className="reaction-summary">{reactionCounts.map((item) => <span key={item.emoji}>{item.emoji} {item.count}</span>)}</div>}
+            </div>
+            {replyTarget === comment._id && <form className="reply-form" onSubmit={submitReply}><textarea value={replyText} onChange={(event) => setReplyText(event.target.value)} maxLength={1000} rows={2} placeholder={`Trả lời ${comment.author?.displayName || 'bình luận này'}…`} required /><button className="button button-small" disabled={!replyText.trim()}>Gửi trả lời</button></form>}
+          </div>
         </article>;
       })}</div> : <p className="no-comments">Chưa có lời nhắn nào. Nếu bạn muốn, hãy để lại một câu.</p>}
       {commentError && <InlineError message={commentError} />}
-      {canComment(user) ? <form className="comment-form" onSubmit={submitComment}>
+      {publicPage && canComment(user) ? <form className="comment-form" onSubmit={submitComment}>
         <label htmlFor="comment-content">Viết một bình luận</label>
         <textarea id="comment-content" value={commentText} onChange={(event) => setCommentText(event.target.value)} maxLength={1000} rows={3} placeholder="Một lời nhắn tử tế..." required />
         <div className="form-end"><span>{commentText.length}/1.000 ký tự</span><button className="button" type="submit" disabled={commenting}>{commenting ? 'Đang gửi…' : 'Gửi bình luận'}</button></div>
-      </form> : user ? <div className="comment-login"><p>Hoàn tất hồ sơ để bình luận.</p><Link className="text-link" to="/setup-profile">Đặt biệt danh</Link></div> : <div className="comment-login"><p>Đăng nhập để để lại bình luận.</p><Link className="text-link" to="/login">Đăng nhập tài khoản</Link></div>}
+      </form> : publicPage && (user ? <div className="comment-login"><p>Hoàn tất hồ sơ để bình luận.</p><Link className="text-link" to="/setup-profile">Đặt biệt danh</Link></div> : <div className="comment-login"><p>Đăng nhập để để lại bình luận.</p><Link className="text-link" to="/login">Đăng nhập tài khoản</Link></div>)}
     </section>
   </article>;
 }
@@ -353,27 +565,62 @@ function EntryFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const editing = Boolean(id);
+  const contentRef = useRef(null);
+  const draftTimer = useRef(null);
+  const draftSaveQueue = useRef(Promise.resolve());
   const [form, setForm] = useState({ title: '', content: '', journalDate: localToday(), mood: '', tagsText: '', visibility: 'private' });
-  const [status, setStatus] = useState(editing ? 'loading' : 'ready');
+  const [status, setStatus] = useState('loading');
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const [draftStatus, setDraftStatus] = useState('');
   const [errors, setErrors] = useState({});
   const [submitError, setSubmitError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!editing) return;
-    api(`/api/entries/${id}`).then(({ entry }) => {
-      setForm({ title: entry.title, content: entry.content, journalDate: entry.journalDate, mood: entry.mood || '', tagsText: (entry.tags || []).join(', '), visibility: entry.visibility });
+    if (editing) {
+      api(`/api/entries/${id}`).then(({ entry }) => {
+        setForm({ title: entry.title, content: entry.content, journalDate: entry.journalDate, mood: entry.mood || '', tagsText: (entry.tags || []).join(', '), visibility: entry.visibility });
+        setStatus('ready');
+      }).catch((error) => { setSubmitError(error.message); setStatus('error'); });
+      return;
+    }
+    api('/api/community/draft').then(({ draft }) => {
+      if (draft) setForm({ title: draft.title || '', content: draft.content || '', journalDate: draft.journalDate || localToday(), mood: draft.mood || '', tagsText: (draft.tags || []).join(', '), visibility: draft.visibility || 'private' });
+      setDraftLoaded(true);
       setStatus('ready');
-    }).catch((error) => { setSubmitError(error.message); setStatus('error'); });
+    }).catch(() => { setDraftLoaded(true); setStatus('ready'); setDraftStatus('Chưa thể tải bản nháp'); });
   }, [id, editing]);
+
+  useEffect(() => {
+    if (editing || !draftLoaded) return;
+    draftTimer.current = setTimeout(() => {
+      setDraftStatus('Đang lưu nháp…');
+      const payload = { title: form.title, content: form.content, journalDate: form.journalDate, mood: form.mood || null, tags: form.tagsText.split(',').map((tag) => tag.trim()).filter(Boolean), visibility: form.visibility };
+      draftSaveQueue.current = draftSaveQueue.current.catch(() => {}).then(() => api('/api/community/draft', { method: 'PUT', body: jsonBody(payload) }))
+        .then(() => setDraftStatus('Đã lưu nháp'))
+        .catch(() => setDraftStatus('Chưa thể lưu nháp'));
+    }, 700);
+    return () => clearTimeout(draftTimer.current);
+  }, [form, editing, draftLoaded]);
 
   function update(field, value) {
     setForm((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
   }
 
+  function insertEmoji(emoji) {
+    const textarea = contentRef.current;
+    const start = textarea?.selectionStart ?? form.content.length;
+    const end = textarea?.selectionEnd ?? form.content.length;
+    const content = `${form.content.slice(0, start)}${emoji}${form.content.slice(end)}`;
+    update('content', content);
+    requestAnimationFrame(() => { textarea?.focus(); textarea?.setSelectionRange(start + emoji.length, start + emoji.length); });
+  }
+
   async function submit(event) {
     event.preventDefault();
+    clearTimeout(draftTimer.current);
+    if (!editing) await draftSaveQueue.current.catch(() => {});
     setSaving(true);
     setSubmitError('');
     setErrors({});
@@ -387,6 +634,7 @@ function EntryFormPage() {
     };
     try {
       const data = await api(editing ? `/api/entries/${id}` : '/api/entries', { method: editing ? 'PUT' : 'POST', body: jsonBody(payload) });
+      if (!editing) await api('/api/community/draft', { method: 'DELETE' }).catch(() => {});
       navigate(`/entries/${data.entry._id}`);
     } catch (error) {
       setSubmitError(error.message);
@@ -400,15 +648,15 @@ function EntryFormPage() {
   if (status === 'error') return <InlineError message={submitError} />;
   return <section className="editor-page">
     <Link className="back-link" to={editing ? `/entries/${id}` : '/my-diary'}>← Quay lại</Link>
-    <div className="editor-heading"><p className="eyebrow">{editing ? 'Chỉnh sửa' : 'Trang mới'}</p><h1>{editing ? 'Ghi thêm điều bạn muốn giữ.' : 'Hôm nay của bạn thế nào?'}</h1><p>Một tiêu đề, vài dòng, và những chi tiết bạn muốn nhớ.</p></div>
+    <div className="editor-heading"><p className="eyebrow">{editing ? 'Chỉnh sửa' : 'Trang mới'}</p><h1>{editing ? 'Ghi thêm điều bạn muốn giữ.' : 'Hôm nay của bạn thế nào?'}</h1><p>Một tiêu đề, vài dòng, và những chi tiết bạn muốn nhớ.</p>{!editing && <small className="draft-status" role="status">{draftStatus || 'Bản nháp được lưu tự động trên tài khoản của bạn.'}</small>}</div>
     {submitError && <InlineError message={submitError} />}
     <form className="entry-form" onSubmit={submit}>
       <div className="form-grid">
         <Field id="journal-date" label="Ngày nhật ký" error={errors.journalDate}><input id="journal-date" type="date" value={form.journalDate} max={localToday()} onChange={(event) => update('journalDate', event.target.value)} required aria-invalid={Boolean(errors.journalDate)} /></Field>
-        <Field id="entry-mood" label="Tâm trạng" error={errors.mood}><select id="entry-mood" value={form.mood} onChange={(event) => update('mood', event.target.value)}><option value="">Không chọn</option>{MOODS.map((mood) => <option key={mood} value={mood}>{capitalize(mood)}</option>)}</select></Field>
+        <Field id="entry-mood" label="Tâm trạng" error={errors.mood}><select id="entry-mood" value={form.mood} onChange={(event) => update('mood', event.target.value)}><option value="">Không chọn</option>{MOODS.map((mood) => <option key={mood} value={mood}>{MOOD_EMOJI[mood]} {capitalize(mood)}</option>)}</select></Field>
       </div>
       <Field id="entry-title" label="Tiêu đề" error={errors.title}><input id="entry-title" value={form.title} onChange={(event) => update('title', event.target.value)} maxLength={120} placeholder="Một điều bạn muốn nhớ" required /></Field>
-      <Field id="entry-content" label="Nội dung" error={errors.content}><textarea id="entry-content" className="entry-content-input" value={form.content} onChange={(event) => update('content', event.target.value)} maxLength={10000} placeholder="Viết theo cách của bạn…" rows={12} required /></Field>
+      <Field id="entry-content" label="Nội dung" error={errors.content}><div className="emoji-toolbar" aria-label="Chèn biểu tượng cảm xúc">{['😊', '❤️', '🌿', '✨', '☀️', '🌧️', '🙏', '☕'].map((emoji) => <button type="button" key={emoji} onClick={() => insertEmoji(emoji)} aria-label={`Chèn ${emoji}`}>{emoji}</button>)}</div><textarea ref={contentRef} id="entry-content" className="entry-content-input" value={form.content} onChange={(event) => update('content', event.target.value)} maxLength={10000} placeholder="Viết theo cách của bạn…" rows={12} required /></Field>
       <Field id="entry-tags" label="Thẻ" hint="Ngăn cách nhiều thẻ bằng dấu phẩy" error={errors.tags}><input id="entry-tags" value={form.tagsText} onChange={(event) => update('tagsText', event.target.value)} placeholder="gia đình, một chuyến đi" /></Field>
       <fieldset className="visibility-fieldset">
         <legend>Ai có thể đọc trang này?</legend>
@@ -667,6 +915,14 @@ function formatLongDate(value) {
 function formatTimestamp(value) {
   if (!value) return '';
   return new Intl.DateTimeFormat('vi-VN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+}
+
+function getCommentDepth(comment, comments, seen = new Set()) {
+  if (!comment?.parentComment || seen.has(String(comment._id)) || seen.size >= 5) return 0;
+  seen.add(String(comment._id));
+  const parentId = String(comment.parentComment?._id || comment.parentComment);
+  const parent = comments.find((item) => String(item._id) === parentId);
+  return parent ? 1 + getCommentDepth(parent, comments, seen) : 0;
 }
 
 function localToday() {

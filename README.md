@@ -10,6 +10,10 @@ Website viết và chia sẻ nhật ký, dùng React/Vite, Express và MongoDB. 
 - Lưu tiêu đề, nội dung, ngày nhật ký, tâm trạng tùy chọn và các thẻ tự nhập.
 - Tìm bài trong nhật ký cá nhân hoặc trong các bài công khai.
 - Ai cũng đọc được bài công khai; người dùng đăng nhập có thể bình luận.
+- Bài viết có emoji tâm trạng và thanh chèn emoji; bài đang tạo được lưu nháp tự động theo tài khoản.
+- Tìm người dùng theo tên đăng nhập, gửi/nhận lời mời kết bạn và trò chuyện riêng sau khi kết bạn.
+- Bình luận trên bài công khai hỗ trợ trả lời theo luồng và thả 👍 ❤️ 😂 😮 😢 🙏.
+- Có thông báo trong ứng dụng cho lời mời và tin nhắn; người dùng có thể chặn hoặc bỏ chặn tài khoản.
 - Người viết bình luận có thể xóa bình luận của mình; chủ bài có thể xóa mọi bình luận trên bài.
 - Chuyển bài sang riêng tư sẽ ẩn bài và bình luận với người khác. Xóa bài sẽ xóa các bình luận đi kèm.
 
@@ -76,6 +80,15 @@ Mở <http://localhost:3000>.
 | `GET` | `/api/public/entries` | Tìm và liệt kê bài công khai |
 | `GET` | `/api/public/entries/:id` | Đọc bài công khai cùng bình luận |
 | `POST` | `/api/public/entries/:id/comments` | Bình luận trên bài công khai |
+| `POST` | `/api/public/entries/:id/comments/:commentId/reactions` | Thêm hoặc gỡ phản ứng trên bình luận công khai |
+| `GET`, `POST` | `/api/community/users`, `/api/community/requests` | Tìm người dùng, gửi lời mời kết bạn |
+| `GET`, `POST`, `DELETE` | `/api/community/requests/:id...` | Xem, chấp nhận hoặc từ chối lời mời |
+| `GET`, `DELETE` | `/api/community/friends` | Xem bạn bè hoặc kết thúc kết nối |
+| `POST`, `GET`, `DELETE` | `/api/community/blocks/:id`, `/api/community/blocks` | Chặn, xem danh sách hoặc bỏ chặn |
+| `GET`, `POST` | `/api/community/conversations...` | Mở hộp thư và tải/gửi tin nhắn giữa bạn bè |
+| `GET` | `/api/community/events` | Sự kiện SSE đã xác thực cho tin nhắn và thông báo mới |
+| `GET`, `PUT`, `DELETE` | `/api/community/draft` | Tải, lưu hoặc xóa bản nháp tài khoản |
+| `GET`, `POST` | `/api/community/notifications` | Xem thông báo và đánh dấu đã đọc |
 
 Các API trả lỗi dưới dạng JSON. API bài riêng tư chỉ trả dữ liệu cho chủ bài; người khác nhận `404` để không tiết lộ bài có tồn tại hay không.
 

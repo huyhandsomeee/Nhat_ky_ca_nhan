@@ -13,6 +13,7 @@ const { configurePassport } = require('./src/auth/passport');
 const authRoutes = require('./src/routes/apiAuth');
 const entryRoutes = require('./src/routes/entries');
 const publicEntryRoutes = require('./src/routes/publicEntries');
+const communityRoutes = require('./src/routes/community');
 
 function createApp(options) {
   configurePassport();
@@ -48,6 +49,7 @@ function createApp(options) {
   app.use('/api/auth', authRoutes);
   app.use('/api/entries', entryRoutes);
   app.use('/api/public/entries', publicEntryRoutes);
+  app.use('/api/community', communityRoutes);
   app.use('/api', (_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Không tìm thấy API.' } }));
 
   if (fs.existsSync(frontendDist)) {

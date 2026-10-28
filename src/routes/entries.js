@@ -37,7 +37,7 @@ router.get('/:id', async (req, res, next) => {
   try {
     const entry = await Entry.findOne({ _id: req.params.id, author: req.user._id });
     if (!entry) return notFound(res);
-    const comments = await Comment.find({ entry: entry._id }).populate('author', 'displayName').sort({ createdAt: 1 });
+    const comments = await Comment.find({ entry: entry._id }).populate('author', 'displayName').populate('reactions.user', 'displayName').sort({ createdAt: 1 });
     return res.json({ entry, comments });
   } catch (error) {
     return next(error);
@@ -86,7 +86,15 @@ router.delete('/:entryId/comments/:commentId', async (req, res, next) => {
       if (entry.visibility === 'private') return notFound(res);
       return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Bạn không có quyền xóa bình luận này.' } });
     }
-    await comment.deleteOne();
+    const hasReplies = await Comment.exists({ parentComment: comment._id });
+    if (hasReplies) {
+      comment.content = 'Bình luận đã được xóa.';
+      comment.deleted = true;
+      comment.reactions = [];
+      await comment.save();
+    } else {
+      await comment.deleteOne();
+    }
     return res.status(204).end();
   } catch (error) {
     return next(error);
