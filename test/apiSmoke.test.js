@@ -29,6 +29,22 @@ test('API reports session state and protects personal journal routes', async (t)
     assert.equal((await response.json()).error.code, 'AUTH_REQUIRED');
   }
 
+  const relationship = await fetch(`${baseUrl}/api/community/people/507f1f77bcf86cd799439011/relationship`);
+  assert.equal(relationship.status, 401, 'relationship details require authentication');
+  assert.equal((await relationship.json()).error.code, 'AUTH_REQUIRED');
+
+  const avatarUpload = await fetch(`${baseUrl}/api/auth/profile/avatar`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'image/png' },
+    body: Buffer.from([137, 80, 78, 71])
+  });
+  assert.equal(avatarUpload.status, 401, 'avatar upload requires authentication');
+  assert.equal((await avatarUpload.json()).error.code, 'AUTH_REQUIRED');
+
+  const missingPublicProfile = await fetch(`${baseUrl}/api/profiles/not-an-object-id`);
+  assert.equal(missingPublicProfile.status, 404);
+  assert.equal((await missingPublicProfile.json()).error.code, 'NOT_FOUND');
+
   const invalidRegister = await fetch(`${baseUrl}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -14,6 +14,7 @@ const authRoutes = require('./routes/apiAuth');
 const entryRoutes = require('./routes/entries');
 const publicEntryRoutes = require('./routes/publicEntries');
 const communityRoutes = require('./routes/community');
+const profileRoutes = require('./routes/profiles');
 
 function createApp(options) {
   configurePassport();
@@ -45,7 +46,10 @@ function createApp(options) {
   app.use(passport.initialize());
   app.use(passport.session());
 
+  const avatarDirectory = path.resolve(__dirname, '..', 'uploads', 'avatars');
+  app.use('/api/avatars', express.static(avatarDirectory, { maxAge: '1d', immutable: true }));
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
+  app.use('/api/profiles', profileRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/entries', entryRoutes);
   app.use('/api/public/entries', publicEntryRoutes);
@@ -65,11 +69,12 @@ function createApp(options) {
   app.use((error, _req, res, _next) => {
     console.error(error);
     if (res.headersSent) return;
-    const status = error.name === 'ValidationError' ? 400 : 500;
+    const tooLarge = error.type === 'entity.too.large';
+    const status = tooLarge ? 413 : error.name === 'ValidationError' ? 400 : 500;
     return res.status(status).json({
       error: {
-        code: status === 400 ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR',
-        message: status === 400 ? 'Dữ liệu không hợp lệ.' : 'Máy chủ gặp lỗi. Hãy thử lại sau.'
+        code: tooLarge ? 'AVATAR_TOO_LARGE' : status === 400 ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR',
+        message: tooLarge ? 'Ảnh đại diện không được vượt quá 2 MB.' : status === 400 ? 'Dữ liệu không hợp lệ.' : 'Máy chủ gặp lỗi. Hãy thử lại sau.'
       }
     });
   });

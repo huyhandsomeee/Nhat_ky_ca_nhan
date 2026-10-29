@@ -8,7 +8,7 @@ function configurePassport() {
 
   passport.deserializeUser(async (id, done) => {
     try {
-      const user = await User.findById(id).select('_id username displayName');
+      const user = await User.findById(id).select('_id username displayName bio avatarPath');
       done(null, user);
     } catch (error) {
       done(error);

@@ -75,8 +75,10 @@ function AppRoutes() {
         <Route path="/" element={loading ? <Loading /> : <Navigate to={user ? '/my-diary' : '/explore'} replace />} />
         <Route path="/explore" element={<ExplorePage />} />
         <Route path="/explore/:id" element={<EntryDetailPage publicPage />} />
+        <Route path="/people/:id" element={<PublicProfilePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/setup-profile" element={<PrivateRoute><ProfileSetupPage /></PrivateRoute>} />
+        <Route path="/profile" element={<PrivateRoute><MyProfilePage /></PrivateRoute>} />
         <Route path="/my-diary" element={<PrivateRoute><MyDiaryPage /></PrivateRoute>} />
         <Route path="/community" element={<PrivateRoute><CommunityPage /></PrivateRoute>} />
         <Route path="/entries/new" element={<PrivateRoute><EntryFormPage /></PrivateRoute>} />
@@ -140,12 +142,18 @@ function Header() {
         {!loading && (user
           ? user.needsProfileSetup
             ? <Link className="button button-small" to="/setup-profile">Đặt biệt danh</Link>
-            : <><span className="user-name">{user.displayName}</span><button className="text-button" onClick={handleLogout}>Đăng xuất</button></>
+            : <><Link className="profile-link" to="/profile" aria-label={`Mở hồ sơ ${user.displayName}`}><UserAvatar src={user.avatarUrl} name={user.displayName} /><span className="user-name">{user.displayName}</span></Link><button className="text-button" onClick={handleLogout}>Đăng xuất</button></>
           : <Link className="button button-small" to="/login">Đăng nhập</Link>)}
       </div>
     </header>
     {logoutError && <div className="toast-error" role="alert">{logoutError}</div>}
   </>;
+}
+
+function UserAvatar({ src, name, className = '' }) {
+  return <span className={`user-avatar ${className}`} aria-hidden="true">
+    {src ? <img src={src} alt="" /> : <span>{(name || 'N').trim().slice(0, 1).toLocaleUpperCase('vi-VN')}</span>}
+  </span>;
 }
 
 function ExplorePage() {
@@ -198,6 +206,7 @@ function ExplorePage() {
 }
 
 function MyDiaryPage() {
+  const { user } = useAuth();
   const [entries, setEntries] = useState([]);
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -236,7 +245,7 @@ function MyDiaryPage() {
       </div>
       {status === 'loading' && <Loading />}
       {status === 'error' && <InlineError message={error} />}
-      {status === 'ready' && (entries.length ? <EntryList entries={entries} /> : <EmptyState title={query ? 'Không tìm thấy trang nào.' : 'Trang đầu tiên đang chờ bạn.'} body={query ? 'Thử từ khóa khác để tìm lại.' : 'Ghi một điều còn vương lại trong ngày hôm nay.'} action={!query && <Link className="button" to="/entries/new">Bắt đầu viết</Link>} />)}
+      {status === 'ready' && (entries.length ? <EntryList entries={entries} displayName={user?.displayName} /> : <EmptyState title={query ? 'Không tìm thấy trang nào.' : 'Trang đầu tiên đang chờ bạn.'} body={query ? 'Thử từ khóa khác để tìm lại.' : 'Ghi một điều còn vương lại trong ngày hôm nay.'} action={!query && <Link className="button" to="/entries/new">Bắt đầu viết</Link>} />)}
     </section>
   </>;
 }
@@ -383,7 +392,7 @@ function CommunityPage() {
           <div className="conversation-list">
             {friends.map((friend) => {
               const conversation = conversations.find((item) => String(item.user?._id) === String(friend._id));
-              return <button className={`conversation-item ${activeConversation?.user?._id === friend._id ? 'active' : ''}`} key={friend._id} onClick={() => openConversation(friend)}><span className="comment-avatar">{(friend.displayName || friend.username).slice(0, 1).toUpperCase()}</span><span><strong>{friend.displayName || friend.username}</strong><small>{conversation?.lastMessage?.content || `@${friend.username}`}</small></span></button>;
+              return <button className={`conversation-item ${activeConversation?.user?._id === friend._id ? 'active' : ''}`} key={friend._id} onClick={() => openConversation(friend)}><UserAvatar src={String(user.id) === String(friend._id) ? user.avatarUrl : friend.avatarPath} name={friend.displayName || friend.username} className="comment-avatar" /><span><strong>{friend.displayName || friend.username}</strong><small>{conversation?.lastMessage?.content || `@${friend.username}`}</small></span></button>;
             })}
             {!friends.length && <p className="community-hint">Khi lời mời được chấp nhận, bạn bè sẽ xuất hiện ở đây.</p>}
           </div>
@@ -400,21 +409,27 @@ function CommunityPage() {
   </section>;
 }
 
-function EntryList({ entries, publicPage = false }) {
-  return <div className="entry-list">{entries.map((entry) => <EntryRow key={entry._id} entry={entry} publicPage={publicPage} />)}</div>;
+function EntryList({ entries, publicPage = false, displayName }) {
+  return <div className="entry-list">{entries.map((entry) => <EntryRow key={entry._id} entry={entry} publicPage={publicPage} displayName={displayName} />)}</div>;
 }
 
-function EntryRow({ entry, publicPage }) {
+function EntryRow({ entry, publicPage, displayName }) {
+  const { user } = useAuth();
+  const authorName = entry.author?.displayName || displayName || 'Người viết';
+  const authorId = entry.author?._id;
+  const authorAvatar = user && String(user.id) === String(authorId) ? user.avatarUrl : entry.author?.avatarPath;
   return <article className="entry-row">
     <div className="entry-date"><span>{formatDay(entry.journalDate)}</span><small>{formatMonthYear(entry.journalDate)}</small></div>
     <div className="entry-row-body">
-      <div className="entry-row-title"><h3><Link to={publicPage ? `/explore/${entry._id}` : `/entries/${entry._id}`}>{entry.title}</Link></h3><span className={`visibility-mark ${entry.visibility}`} title={entry.visibility === 'public' ? 'Công khai' : 'Riêng tư'}>{entry.visibility === 'public' ? '◉' : '◌'}</span></div>
+      <div className="entry-row-title"><h3><Link to={publicPage ? `/explore/${entry._id}` : `/entries/${entry._id}`}>{entry.title}</Link></h3>{publicPage && <span className="entry-row-mood"><UserAvatar src={authorAvatar} name={authorName} className="entry-author-avatar" /><strong>{entry.author?._id ? <Link to={`/people/${entry.author._id}`}>{authorName}</Link> : authorName}</strong>{entry.mood && <> đang cảm thấy <span aria-hidden="true">{MOOD_EMOJI[entry.mood] || '💭'}</span><strong>{capitalize(entry.mood)}</strong></>}</span>}{!publicPage && entry.mood && <span className="entry-row-mood"><span aria-hidden="true">{MOOD_EMOJI[entry.mood] || '💭'}</span><strong>{authorName}</strong> đang cảm thấy <strong>{capitalize(entry.mood)}</strong></span>}<span className={`visibility-mark ${entry.visibility}`} title={entry.visibility === 'public' ? 'Công khai' : 'Riêng tư'}>{entry.visibility === 'public' ? '◉' : '◌'}</span></div>
       <p className="entry-excerpt">{entry.content}</p>
       <div className="entry-meta">
-        {entry.mood && <span className="mood-chip">{entry.mood}</span>}
         {(entry.tags || []).map((tag) => <span className="tag" key={tag}>#{tag}</span>)}
-        {publicPage && entry.author?.displayName && <span className="author-name">viết bởi {entry.author.displayName}</span>}
       </div>
+      {publicPage && entry.previewComments?.length > 0 && <div className="entry-comment-previews" aria-label="Một số bình luận">
+        {entry.previewComments.map((comment) => <p key={comment._id}><UserAvatar src={user && String(user.id) === String(comment.author?.id) ? user.avatarUrl : comment.author?.avatarUrl} name={comment.author?.displayName} className="preview-comment-avatar" /><strong>{comment.author?.id ? <Link to={`/people/${comment.author.id}`}>{comment.author.displayName}</Link> : comment.author?.displayName || 'Người viết'}</strong><span>{comment.content}</span></p>)}
+        <Link to={`/explore/${entry._id}`} className="entry-comments-link">Xem cuộc trò chuyện</Link>
+      </div>}
     </div>
     <Link className="row-open" to={publicPage ? `/explore/${entry._id}` : `/entries/${entry._id}`} aria-label={`Mở bài ${entry.title}`}>↗</Link>
   </article>;
@@ -433,6 +448,8 @@ function EntryDetailPage({ publicPage = false }) {
   const [replyText, setReplyText] = useState('');
   const [commentError, setCommentError] = useState('');
   const [commenting, setCommenting] = useState(false);
+  const [openReactionPicker, setOpenReactionPicker] = useState(null);
+  const [hoveredReactionPicker, setHoveredReactionPicker] = useState(null);
 
   async function loadEntry() {
     setStatus('loading');
@@ -484,6 +501,8 @@ function EntryDetailPage({ publicPage = false }) {
         method: 'POST', body: jsonBody({ emoji: own?.emoji === emoji ? null : emoji })
       });
       setComments((current) => current.map((item) => item._id === comment._id ? updated : item));
+      setOpenReactionPicker(null);
+      setHoveredReactionPicker(null);
     } catch (reason) { setCommentError(reason.message); }
   }
 
@@ -512,15 +531,16 @@ function EntryDetailPage({ publicPage = false }) {
 
   const authorId = entry.author?._id || entry.author;
   const isOwner = Boolean(user && String(user.id) === String(authorId));
+  const authorName = entry.author?.displayName || (isOwner ? user?.displayName : '') || 'Người viết';
   const backPath = publicPage ? '/explore' : '/my-diary';
   return <article className="entry-detail">
     <Link className="back-link" to={backPath}>← {publicPage ? 'Góc chia sẻ' : 'Sổ của tôi'}</Link>
     <header className="detail-header">
       <div className="detail-date"><span>{formatDay(entry.journalDate)}</span><small>{formatLongDate(entry.journalDate)}</small></div>
       <div className="detail-title-block">
-        <div className="detail-labels"><span className={`privacy-pill ${entry.visibility}`}>{entry.visibility === 'public' ? 'Đang chia sẻ' : 'Chỉ mình tôi'}</span>{entry.mood && <span className="mood-chip">{entry.mood}</span>}</div>
+        <div className="detail-labels"><span className={`privacy-pill ${entry.visibility}`}>{entry.visibility === 'public' ? 'Đang chia sẻ' : 'Chỉ mình tôi'}</span>{entry.mood && <p className="mood-byline"><UserAvatar src={isOwner ? user?.avatarUrl : entry.author?.avatarPath} name={authorName} className="mood-byline-avatar" /><strong>{publicPage && entry.author?._id ? <Link to={`/people/${entry.author._id}`}>{authorName}</Link> : authorName}</strong> đang cảm thấy <span className="mood-byline-icon" aria-hidden="true">{MOOD_EMOJI[entry.mood] || '💭'}</span><strong>{capitalize(entry.mood)}</strong></p>}</div>
         <h1>{entry.title}</h1>
-        {publicPage && entry.author?.displayName && <p className="byline">Một trang của <strong>{entry.author.displayName}</strong></p>}
+        {publicPage && entry.author?.displayName && !entry.mood && <p className="byline"><UserAvatar src={entry.author.avatarPath} name={authorName} className="byline-avatar" /> Một trang của <strong><Link to={`/people/${entry.author._id}`}>{entry.author.displayName}</Link></strong></p>}
       </div>
       {isOwner && <div className="detail-actions"><Link className="button button-outline button-small" to={`/entries/${entry._id}/edit`}>Sửa bài</Link><button className="text-button danger-text" onClick={deleteEntry}>Xóa</button></div>}
     </header>
@@ -533,19 +553,20 @@ function EntryDetailPage({ publicPage = false }) {
       <div className="comments-heading"><div><p className="eyebrow">Cuộc trò chuyện</p><h2>Bình luận <span>{comments.length}</span></h2></div></div>
       {comments.length ? <div className="comment-list">{comments.map((comment) => {
         const commenterId = comment.author?._id || comment.author;
+        const commenterName = comment.deleted ? 'Người viết' : comment.author?.displayName || 'Người viết';
         const canDelete = user && (String(user.id) === String(commenterId) || isOwner);
         const parent = comments.find((item) => item._id === String(comment.parentComment?._id || comment.parentComment));
         const depth = parent ? Math.min(4, 1 + getCommentDepth(parent, comments)) : 0;
         const ownReaction = comment.reactions?.find((reaction) => String(reaction.user?._id || reaction.user) === String(user?.id));
         const reactionCounts = REACTIONS.map((emoji) => ({ emoji, count: comment.reactions?.filter((reaction) => reaction.emoji === emoji).length || 0 })).filter((item) => item.count);
         return <article className="comment" key={comment._id}>
-          <div className="comment-avatar" aria-hidden="true">{(comment.author?.displayName || '?').slice(0, 1).toUpperCase()}</div>
+          <UserAvatar src={!comment.deleted ? (user && String(user.id) === String(commenterId) ? user.avatarUrl : comment.author?.avatarPath) : null} name={commenterName} className="comment-avatar" />
           <div className={`comment-main ${depth ? 'comment-reply' : ''}`} style={depth ? { marginLeft: `${Math.min(depth, 3) * 18}px` } : undefined}>
-            <div className="comment-byline"><strong>{comment.deleted ? 'Người viết' : comment.author?.displayName || 'Người viết'}</strong><time>{formatTimestamp(comment.createdAt)}</time>{canDelete && !comment.deleted && <button className="text-button comment-delete" onClick={() => deleteComment(comment._id)}>Xóa</button>}</div>
+            <div className="comment-byline"><strong>{publicPage && !comment.deleted && comment.author?._id ? <Link to={`/people/${comment.author._id}`}>{commenterName}</Link> : commenterName}</strong><time>{formatTimestamp(comment.createdAt)}</time>{canDelete && !comment.deleted && <button className="text-button comment-delete" onClick={() => deleteComment(comment._id)}>Xóa</button>}</div>
             <p>{comment.content}</p>
-            <div className="comment-actions">
-              {publicPage && canComment(user) && !comment.deleted && <><button className="text-button" onClick={() => { setReplyTarget(replyTarget === comment._id ? null : comment._id); setReplyText(''); }}>↩ Trả lời</button><div className="reaction-picker">{REACTIONS.map((emoji) => <button key={emoji} aria-label={`Thả ${emoji}`} title={emoji} className={`reaction-button ${ownReaction?.emoji === emoji ? 'selected' : ''}`} onClick={() => toggleReaction(comment, emoji)}>{emoji}</button>)}</div></>}
-              {!!reactionCounts.length && <div className="reaction-summary">{reactionCounts.map((item) => <span key={item.emoji}>{item.emoji} {item.count}</span>)}</div>}
+            <div className={`comment-actions ${openReactionPicker === comment._id || hoveredReactionPicker === comment._id ? 'reactions-open' : ''}`} onMouseLeave={() => setHoveredReactionPicker(null)}>
+              {publicPage && canComment(user) && !comment.deleted && <><button className="text-button" onClick={() => { setReplyTarget(replyTarget === comment._id ? null : comment._id); setReplyText(''); }}>↩ Trả lời</button><button className="text-button reaction-trigger" aria-label="Mở bảng cảm xúc" aria-expanded={openReactionPicker === comment._id || hoveredReactionPicker === comment._id} onMouseEnter={() => setHoveredReactionPicker(comment._id)} onClick={() => { setHoveredReactionPicker(null); setOpenReactionPicker((current) => current === comment._id ? null : comment._id); }}>☺ Cảm xúc</button><div className="reaction-picker" role="group" aria-label="Chọn cảm xúc">{REACTIONS.map((emoji) => <button key={emoji} aria-label={`Thả ${emoji}`} title={emoji} className={`reaction-button ${ownReaction?.emoji === emoji ? 'selected' : ''}`} onClick={() => toggleReaction(comment, emoji)}>{emoji}</button>)}</div></>}
+              {!!reactionCounts.length && <div className="reaction-summary" onMouseEnter={() => setHoveredReactionPicker(comment._id)}>{reactionCounts.map((item) => <span key={item.emoji}>{item.emoji} {item.count}</span>)}</div>}
             </div>
             {replyTarget === comment._id && <form className="reply-form" onSubmit={submitReply}><textarea value={replyText} onChange={(event) => setReplyText(event.target.value)} maxLength={1000} rows={2} placeholder={`Trả lời ${comment.author?.displayName || 'bình luận này'}…`} required /><button className="button button-small" disabled={!replyText.trim()}>Gửi trả lời</button></form>}
           </div>
@@ -651,18 +672,23 @@ function EntryFormPage() {
     <div className="editor-heading"><p className="eyebrow">{editing ? 'Chỉnh sửa' : 'Trang mới'}</p><h1>{editing ? 'Ghi thêm điều bạn muốn giữ.' : 'Hôm nay của bạn thế nào?'}</h1><p>Một tiêu đề, vài dòng, và những chi tiết bạn muốn nhớ.</p>{!editing && <small className="draft-status" role="status">{draftStatus || 'Bản nháp được lưu tự động trên tài khoản của bạn.'}</small>}</div>
     {submitError && <InlineError message={submitError} />}
     <form className="entry-form" onSubmit={submit}>
-      <div className="form-grid">
-        <Field id="journal-date" label="Ngày nhật ký" error={errors.journalDate}><input id="journal-date" type="date" value={form.journalDate} max={localToday()} onChange={(event) => update('journalDate', event.target.value)} required aria-invalid={Boolean(errors.journalDate)} /></Field>
-        <Field id="entry-mood" label="Tâm trạng" error={errors.mood}><select id="entry-mood" value={form.mood} onChange={(event) => update('mood', event.target.value)}><option value="">Không chọn</option>{MOODS.map((mood) => <option key={mood} value={mood}>{MOOD_EMOJI[mood]} {capitalize(mood)}</option>)}</select></Field>
-      </div>
+      <fieldset className="visibility-fieldset">
+        <legend>Chế độ chia sẻ</legend>
+        <div className="visibility-options">
+          <label className={`visibility-option ${form.visibility === 'private' ? 'selected' : ''}`}><input type="radio" name="visibility" value="private" checked={form.visibility === 'private'} onChange={() => update('visibility', 'private')} /><span className="visibility-icon" aria-hidden="true">◌</span><span><strong>Chỉ mình tôi</strong><small>Bài viết và bình luận chỉ bạn xem được.</small></span></label>
+          <label className={`visibility-option ${form.visibility === 'public' ? 'selected' : ''}`}><input type="radio" name="visibility" value="public" checked={form.visibility === 'public'} onChange={() => update('visibility', 'public')} /><span className="visibility-icon" aria-hidden="true">◎</span><span><strong>Công khai</strong><small>Mọi người có thể đọc; người đăng nhập có thể bình luận.</small></span></label>
+        </div>
+      </fieldset>
+      <Field id="journal-date" label="Ngày nhật ký" error={errors.journalDate}><input id="journal-date" className="entry-date-input" type="date" value={form.journalDate} max={localToday()} onChange={(event) => update('journalDate', event.target.value)} required aria-invalid={Boolean(errors.journalDate)} /></Field>
       <Field id="entry-title" label="Tiêu đề" error={errors.title}><input id="entry-title" value={form.title} onChange={(event) => update('title', event.target.value)} maxLength={120} placeholder="Một điều bạn muốn nhớ" required /></Field>
       <Field id="entry-content" label="Nội dung" error={errors.content}><div className="emoji-toolbar" aria-label="Chèn biểu tượng cảm xúc">{['😊', '❤️', '🌿', '✨', '☀️', '🌧️', '🙏', '☕'].map((emoji) => <button type="button" key={emoji} onClick={() => insertEmoji(emoji)} aria-label={`Chèn ${emoji}`}>{emoji}</button>)}</div><textarea ref={contentRef} id="entry-content" className="entry-content-input" value={form.content} onChange={(event) => update('content', event.target.value)} maxLength={10000} placeholder="Viết theo cách của bạn…" rows={12} required /></Field>
-      <Field id="entry-tags" label="Thẻ" hint="Ngăn cách nhiều thẻ bằng dấu phẩy" error={errors.tags}><input id="entry-tags" value={form.tagsText} onChange={(event) => update('tagsText', event.target.value)} placeholder="gia đình, một chuyến đi" /></Field>
-      <fieldset className="visibility-fieldset">
-        <legend>Ai có thể đọc trang này?</legend>
-        <label className={`visibility-option ${form.visibility === 'private' ? 'selected' : ''}`}><input type="radio" name="visibility" value="private" checked={form.visibility === 'private'} onChange={() => update('visibility', 'private')} /><span><strong>Chỉ mình tôi</strong><small>Bài viết và bình luận chỉ bạn xem được.</small></span><span className="radio-dot" /></label>
-        <label className={`visibility-option ${form.visibility === 'public' ? 'selected' : ''}`}><input type="radio" name="visibility" value="public" checked={form.visibility === 'public'} onChange={() => update('visibility', 'public')} /><span><strong>Mọi người</strong><small>Bất kỳ ai cũng có thể đọc và người dùng đăng nhập có thể bình luận.</small></span><span className="radio-dot" /></label>
-      </fieldset>
+      <div className="entry-tools" role="group" aria-label="Tâm trạng và thẻ">
+        <span className="entry-tools-title">Thêm vào trang viết</span>
+        <div className="entry-tools-controls">
+          <Field id="entry-mood" label={<><span aria-hidden="true">☻</span> Tâm trạng</>} error={errors.mood}><select id="entry-mood" value={form.mood} onChange={(event) => update('mood', event.target.value)}><option value="">Chọn tâm trạng</option>{MOODS.map((mood) => <option key={mood} value={mood}>{MOOD_EMOJI[mood]} {capitalize(mood)}</option>)}</select></Field>
+          <Field id="entry-tags" label={<><span aria-hidden="true">#</span> Gắn thẻ</>} hint="Ngăn cách bằng dấu phẩy" error={errors.tags}><input id="entry-tags" value={form.tagsText} onChange={(event) => update('tagsText', event.target.value)} placeholder="gia đình, một chuyến đi" /></Field>
+        </div>
+      </div>
       <div className="form-actions"><Link className="text-link" to={editing ? `/entries/${id}` : '/my-diary'}>Hủy</Link><button className="button" type="submit" disabled={saving}>{saving ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Lưu trang viết'}</button></div>
     </form>
   </section>;
@@ -704,6 +730,184 @@ function ProfileSetupPage() {
   </section>;
 }
 
+function MyProfilePage() {
+  const { user, refresh } = useAuth();
+  const [displayName, setDisplayName] = useState(user?.displayName || '');
+  const [bio, setBio] = useState(user?.bio || '');
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState('');
+  const [avatarError, setAvatarError] = useState('');
+  const [message, setMessage] = useState('');
+
+  async function saveProfile(event) {
+    event.preventDefault();
+    setSaving(true);
+    setError('');
+    setMessage('');
+    try {
+      await api('/api/auth/profile', { method: 'PUT', body: jsonBody({ displayName, bio }) });
+      await refresh();
+      setMessage('Đã lưu hồ sơ.');
+    } catch (reason) {
+      setError(reason.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function uploadAvatar(event) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+    setUploading(true);
+    setAvatarError('');
+    setMessage('');
+    try {
+      await api('/api/auth/profile/avatar', { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+      await refresh();
+      setMessage('Đã cập nhật ảnh đại diện.');
+    } catch (reason) {
+      setAvatarError(reason.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeAvatar() {
+    setUploading(true);
+    setAvatarError('');
+    setMessage('');
+    try {
+      await api('/api/auth/profile/avatar', { method: 'DELETE' });
+      await refresh();
+      setMessage('Đã gỡ ảnh đại diện.');
+    } catch (reason) {
+      setAvatarError(reason.message);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  return <section className="profile-page">
+    <Link className="back-link" to="/my-diary">← Sổ của tôi</Link>
+    <div className="profile-page-heading">
+      <UserAvatar src={user?.avatarUrl} name={displayName} className="profile-avatar-large" />
+      <div><p className="eyebrow">Hồ sơ cá nhân</p><h1>{displayName || 'Hồ sơ của bạn'}</h1><p className="profile-username">@{user?.username}</p><p>Những thông tin này sẽ hiện trên trang Profile công khai.</p></div>
+    </div>
+    {(error || message) && <div className={error ? 'inline-error' : 'inline-success'} role={error ? 'alert' : 'status'}>{error || message}</div>}
+    <div className="profile-edit-layout">
+      <div className="profile-edit-panel">
+        <div className="avatar-editor">
+          <UserAvatar src={user?.avatarUrl} name={displayName} className="profile-avatar-editor" />
+          <div><strong>Ảnh đại diện</strong><small>JPEG, PNG hoặc WebP, tối đa 2 MB.</small><div className="avatar-actions"><label className="button button-outline button-small" htmlFor="profile-avatar-upload">{uploading ? 'Đang xử lý…' : 'Chọn ảnh'}</label>{user?.avatarUrl && <button className="text-button danger-text" type="button" onClick={removeAvatar} disabled={uploading}>Gỡ ảnh</button>}</div></div>
+          <input id="profile-avatar-upload" className="sr-only" type="file" accept="image/jpeg,image/png,image/webp" onChange={uploadAvatar} disabled={uploading} />
+        </div>
+        {avatarError && <small className="field-error" role="alert">{avatarError}</small>}
+        <form className="profile-edit-form" onSubmit={saveProfile}>
+          <label htmlFor="profile-display-name">Biệt danh</label>
+          <input id="profile-display-name" value={displayName} onChange={(event) => setDisplayName(event.target.value)} minLength={2} maxLength={40} required />
+          <label htmlFor="profile-bio">Giới thiệu</label>
+          <textarea id="profile-bio" value={bio} onChange={(event) => setBio(event.target.value)} maxLength={280} rows={4} placeholder="Viết đôi điều về bạn…" />
+          <small className="field-hint">{bio.length}/280 ký tự</small>
+          <button className="button" type="submit" disabled={saving}>{saving ? 'Đang lưu…' : 'Lưu hồ sơ'}</button>
+        </form>
+      </div>
+      <aside className="profile-public-preview">
+        <p className="eyebrow">Trang công khai</p>
+        <div className="profile-preview-heading"><UserAvatar src={user?.avatarUrl} name={displayName} /><div><strong>{displayName || 'Biệt danh của bạn'}</strong><small className="profile-username">@{user?.username}</small></div></div>
+        <p>{bio || 'Phần giới thiệu sẽ xuất hiện tại đây.'}</p>
+        <Link className="text-link" to={`/people/${user?.id}`}>Xem trang công khai</Link>
+      </aside>
+    </div>
+  </section>;
+}
+
+function PublicProfilePage() {
+  const { id } = useParams();
+  const { user } = useAuth();
+  const [profile, setProfile] = useState(null);
+  const [entries, setEntries] = useState([]);
+  const [relationship, setRelationship] = useState(null);
+  const [relationshipBusy, setRelationshipBusy] = useState(false);
+  const [status, setStatus] = useState('loading');
+  const [error, setError] = useState('');
+  const [relationshipError, setRelationshipError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    api(`/api/profiles/${id}`)
+      .then((data) => { if (active) { setProfile(data.profile); setEntries(data.entries || []); setStatus('ready'); } })
+      .catch((reason) => { if (active) { setError(reason.message); setStatus('error'); } });
+    return () => { active = false; };
+  }, [id]);
+
+  useEffect(() => {
+    let active = true;
+    setRelationship(null);
+    setRelationshipError('');
+    if (!user || user.needsProfileSetup || String(user.id) === String(id)) {
+      if (user && String(user.id) === String(id)) setRelationship({ state: 'self' });
+      return () => { active = false; };
+    }
+    api(`/api/community/people/${id}/relationship`)
+      .then((data) => { if (active) setRelationship(data.relationship); })
+      .catch((reason) => { if (active) setRelationshipError(reason.message); });
+    return () => { active = false; };
+  }, [id, user?.id, user?.needsProfileSetup]);
+
+  async function sendFriendRequest() {
+    setRelationshipBusy(true);
+    setRelationshipError('');
+    try {
+      await api('/api/community/requests', { method: 'POST', body: jsonBody({ userId: id }) });
+      setRelationship({ state: 'outgoing' });
+    } catch (reason) {
+      setRelationshipError(reason.message);
+    } finally {
+      setRelationshipBusy(false);
+    }
+  }
+
+  async function acceptFriendRequest() {
+    if (!relationship?.requestId) return;
+    setRelationshipBusy(true);
+    setRelationshipError('');
+    try {
+      await api(`/api/community/requests/${relationship.requestId}/accept`, { method: 'POST' });
+      setRelationship({ state: 'friends' });
+    } catch (reason) {
+      setRelationshipError(reason.message);
+    } finally {
+      setRelationshipBusy(false);
+    }
+  }
+
+  if (status === 'loading') return <Loading />;
+  if (status === 'error') return <section className="profile-page"><InlineError message={error} /><Link className="text-link" to="/explore">Quay lại Góc chia sẻ</Link></section>;
+
+  return <section className="public-profile-page">
+    <Link className="back-link" to="/explore">← Góc chia sẻ</Link>
+    <header className="public-profile-header">
+      <UserAvatar src={String(user?.id) === String(profile.id) ? user?.avatarUrl : profile.avatarUrl} name={profile.displayName} className="profile-avatar-large" />
+      <div className="public-profile-identity"><p className="eyebrow">Người viết</p><h1>{profile.displayName}</h1><p className="profile-username">@{profile.username}</p>{profile.bio && <p>{profile.bio}</p>}
+        {relationship?.state === 'none' && <button className="button button-small" type="button" onClick={sendFriendRequest} disabled={relationshipBusy}>{relationshipBusy ? 'Đang gửi…' : '＋ Thêm bạn'}</button>}
+        {relationship?.state === 'incoming' && <button className="button button-small" type="button" onClick={acceptFriendRequest} disabled={relationshipBusy}>{relationshipBusy ? 'Đang chấp nhận…' : 'Chấp nhận lời mời'}</button>}
+        {relationship?.state === 'outgoing' && <span className="relationship-status">Đã gửi lời mời kết bạn</span>}
+        {relationship?.state === 'friends' && <span className="relationship-status">Đã là bạn bè</span>}
+        {relationship?.state === 'unavailable' && <span className="relationship-status">Không thể kết bạn</span>}
+        {!user && <Link className="button button-small" to="/login" state={{ from: `/people/${profile.id}` }}>Đăng nhập để kết bạn</Link>}
+        {user?.needsProfileSetup && <Link className="button button-small" to="/setup-profile">Đặt biệt danh để kết bạn</Link>}
+        {relationshipError && <small className="field-error" role="alert">{relationshipError}</small>}
+      </div>
+    </header>
+    <section className="content-section" aria-labelledby="profile-entries-heading">
+      <div className="section-heading"><div><p className="eyebrow">Góc chia sẻ</p><h2 id="profile-entries-heading">Bài viết công khai</h2></div></div>
+      {entries.length ? <EntryList entries={entries} publicPage /> : <EmptyState title="Chưa có bài viết công khai." body="Những trang được chia sẻ sẽ xuất hiện ở đây." />}
+    </section>
+  </section>;
+}
+
 function LoginPage() {
   const [mode, setMode] = useState('login');
   const [username, setUsername] = useState('');
@@ -717,6 +921,8 @@ function LoginPage() {
 
   const { user, loading, login, register, resetPassword } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = location.state?.from || '/my-diary';
 
   if (!loading && user && !user.needsProfileSetup) return <Navigate to="/my-diary" replace />;
   if (!loading && user?.needsProfileSetup) return <Navigate to="/setup-profile" replace />;
@@ -738,7 +944,7 @@ function LoginPage() {
     try {
       if (mode === 'login') {
         await login(username, password);
-        navigate('/my-diary');
+        navigate(returnTo, { replace: true });
       } else if (mode === 'register') {
         if (password !== confirmPassword) {
           setFieldErrors({ confirmPassword: 'Mật khẩu xác nhận không khớp.' });
@@ -746,7 +952,7 @@ function LoginPage() {
           return;
         }
         await register(username, password, confirmPassword, displayName);
-        navigate('/my-diary');
+        navigate(returnTo, { replace: true });
       } else if (mode === 'reset') {
         if (password !== confirmPassword) {
           setFieldErrors({ confirmPassword: 'Mật khẩu xác nhận không khớp.' });
@@ -755,7 +961,7 @@ function LoginPage() {
         }
         await resetPassword(username, password, confirmPassword);
         setSuccess('Đặt lại mật khẩu thành công!');
-        navigate('/my-diary');
+        navigate(returnTo, { replace: true });
       }
     } catch (err) {
       setError(err.message || 'Có lỗi xảy ra, vui lòng thử lại.');

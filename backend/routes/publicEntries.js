@@ -13,10 +13,39 @@ router.get('/', async (req, res, next) => {
     const filter = { visibility: 'public' };
     if (search) filter.$or = searchConditions(search);
     const entries = await Entry.find(filter)
-      .populate('author', 'displayName')
+      .populate('author', 'displayName avatarPath')
       .sort({ journalDate: -1, createdAt: -1 })
       .limit(50);
-    return res.json({ entries, search });
+    const previewGroups = entries.length ? await Comment.aggregate([
+      { $match: { entry: { $in: entries.map((entry) => entry._id) }, parentComment: null, deleted: { $ne: true } } },
+      { $sort: { createdAt: -1 } },
+      { $lookup: { from: 'users', localField: 'author', foreignField: '_id', as: 'commentAuthor' } },
+      { $unwind: '$commentAuthor' },
+      {
+        $group: {
+          _id: '$entry',
+          comments: {
+            $push: {
+              _id: '$_id',
+              content: '$content',
+              author: {
+                id: '$author',
+                displayName: { $ifNull: ['$commentAuthor.displayName', 'Người viết'] },
+                avatarUrl: { $ifNull: ['$commentAuthor.avatarPath', null] }
+              },
+              createdAt: '$createdAt'
+            }
+          }
+        }
+      },
+      { $project: { comments: { $slice: ['$comments', 2] } } }
+    ]) : [];
+    const previewsByEntry = new Map(previewGroups.map((group) => [String(group._id), group.comments]));
+    const entriesWithPreviews = entries.map((entry) => ({
+      ...entry.toObject(),
+      previewComments: previewsByEntry.get(String(entry._id)) || []
+    }));
+    return res.json({ entries: entriesWithPreviews, search });
   } catch (error) {
     return next(error);
   }
@@ -26,10 +55,10 @@ router.get('/:id', async (req, res, next) => {
   if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
   try {
     const entry = await Entry.findOne({ _id: req.params.id, visibility: 'public' })
-      .populate('author', 'displayName');
+      .populate('author', 'displayName avatarPath');
     if (!entry) return notFound(res);
     const comments = await Comment.find({ entry: entry._id })
-      .populate('author', 'displayName')
+      .populate('author', 'displayName avatarPath')
       .populate('reactions.user', 'displayName')
       .sort({ createdAt: 1 });
     return res.json({ entry, comments });
@@ -52,7 +81,7 @@ router.post('/:id/comments', requireAuth, requireProfile, async (req, res, next)
     if (parentCommentId && !mongoose.isValidObjectId(parentCommentId)) return notFound(res);
     if (parentCommentId && !await Comment.exists({ _id: parentCommentId, entry: entry._id })) return notFound(res);
     const comment = await Comment.create({ content, parentComment: parentCommentId, entry: entry._id, author: req.user._id });
-    await comment.populate('author', 'displayName');
+    await comment.populate('author', 'displayName avatarPath');
     return res.status(201).json({ comment });
   } catch (error) {
     return next(error);
@@ -71,7 +100,7 @@ router.post('/:id/comments/:commentId/reactions', requireAuth, requireProfile, a
     comment.reactions = comment.reactions.filter((reaction) => String(reaction.user) !== String(req.user._id));
     if (emoji) comment.reactions.push({ user: req.user._id, emoji });
     await comment.save();
-    await comment.populate('author', 'displayName');
+    await comment.populate('author', 'displayName avatarPath');
     await comment.populate('reactions.user', 'displayName');
     return res.json({ comment });
   } catch (error) { return next(error); }

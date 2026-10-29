@@ -45,6 +45,23 @@ test('users use username, password and a private user-selected display name', as
   assert.equal(await user.comparePassword('wrong-secret'), false);
 });
 
+test('users store a bounded profile bio and optional avatar path', () => {
+  const user = new User({
+    username: 'diary_user',
+    password: 'secret123',
+    displayName: 'Mây',
+    bio: 'Ghi lại những ngày bình thường.',
+    avatarPath: '/api/avatars/2b931b4b-2612-4ae0-a71f-c0bdce6c3183.webp'
+  });
+
+  assert.equal(user.bio, 'Ghi lại những ngày bình thường.');
+  assert.equal(user.avatarPath, '/api/avatars/2b931b4b-2612-4ae0-a71f-c0bdce6c3183.webp');
+  assert.equal(user.validateSync(), undefined);
+
+  const invalidBio = new User({ username: 'other_user', password: 'secret123', bio: 'x'.repeat(281) });
+  assert.ok(invalidBio.validateSync().errors.bio);
+});
+
 test('comments belong to both an entry and an authenticated user', () => {
   const comment = new Comment({
     content: 'Cảm ơn bạn đã chia sẻ.',

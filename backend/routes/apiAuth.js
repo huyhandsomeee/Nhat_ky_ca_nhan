@@ -1,20 +1,16 @@
 const express = require('express');
 const User = require('../models/User');
 const { requireAuth } = require('../middleware/auth');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { toAuthUser } = require('../services/profileData');
+const { MAX_AVATAR_BYTES, validateAvatar, createAvatarFilename, removeStoredAvatar } = require('../services/avatarStorage');
 
 const router = express.Router();
 
 router.get('/me', (req, res) => {
   if (!req.isAuthenticated?.()) return res.json({ authenticated: false, user: null });
-  res.json({
-    authenticated: true,
-    user: {
-      id: req.user.id,
-      username: req.user.username,
-      displayName: req.user.displayName || req.user.username,
-      needsProfileSetup: !String(req.user.displayName || '').trim()
-    }
-  });
+  res.json({ authenticated: true, user: toAuthUser(req.user) });
 });
 
 router.post('/register', async (req, res, next) => {
@@ -65,12 +61,7 @@ router.post('/register', async (req, res, next) => {
       if (loginError) return next(loginError);
       return res.status(201).json({
         message: 'Đăng ký thành công.',
-        user: {
-          id: user.id,
-          username: user.username,
-          displayName: user.displayName || user.username,
-          needsProfileSetup: false
-        }
+        user: toAuthUser(user)
       });
     });
   } catch (error) {
@@ -119,12 +110,7 @@ router.post('/login', async (req, res, next) => {
       if (loginError) return next(loginError);
       return res.json({
         message: 'Đăng nhập thành công.',
-        user: {
-          id: user.id,
-          username: user.username,
-          displayName: user.displayName || user.username,
-          needsProfileSetup: false
-        }
+        user: toAuthUser(user)
       });
     });
   } catch (error) {
@@ -163,12 +149,7 @@ router.post('/reset-password', async (req, res, next) => {
       if (loginError) return next(loginError);
       return res.json({
         message: 'Đặt lại mật khẩu thành công.',
-        user: {
-          id: user.id,
-          username: user.username,
-          displayName: user.displayName || user.username,
-          needsProfileSetup: false
-        }
+        user: toAuthUser(user)
       });
     });
   } catch (error) {
@@ -178,16 +159,65 @@ router.post('/reset-password', async (req, res, next) => {
 
 router.put('/profile', requireAuth, async (req, res, next) => {
   const displayName = String(req.body?.displayName || '').trim();
+  const bio = String(req.body?.bio ?? req.user.bio ?? '').trim();
   if (displayName.length < 2 || displayName.length > 40) {
     return res.status(400).json({
       error: { code: 'VALIDATION_ERROR', message: 'Biệt danh cần từ 2 đến 40 ký tự.', fields: { displayName: 'Biệt danh cần từ 2 đến 40 ký tự.' } }
     });
   }
+  if (bio.length > 280) {
+    return res.status(400).json({
+      error: { code: 'VALIDATION_ERROR', message: 'Giới thiệu không được vượt quá 280 ký tự.', fields: { bio: 'Giới thiệu không được vượt quá 280 ký tự.' } }
+    });
+  }
 
   try {
     req.user.displayName = displayName;
+    req.user.bio = bio;
     await req.user.save();
-    return res.json({ user: { id: req.user.id, username: req.user.username, displayName, needsProfileSetup: false } });
+    return res.json({ user: toAuthUser(req.user) });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+const avatarDirectory = path.resolve(__dirname, '..', '..', 'uploads', 'avatars');
+
+router.put('/profile/avatar', requireAuth, express.raw({ type: '*/*', limit: MAX_AVATAR_BYTES }), async (req, res, next) => {
+  const validation = validateAvatar(req.body, req.get('content-type'));
+  if (validation.code) return res.status(validation.code === 'AVATAR_TOO_LARGE' ? 413 : 400).json({ error: validation });
+
+  let newAvatarPath;
+  try {
+    await fs.mkdir(avatarDirectory, { recursive: true });
+    const filename = createAvatarFilename(validation.extension);
+    const absolutePath = path.join(avatarDirectory, filename);
+    newAvatarPath = `/api/avatars/${filename}`;
+    await fs.writeFile(absolutePath, req.body, { flag: 'wx' });
+
+    const previousAvatarPath = req.user.avatarPath;
+    req.user.avatarPath = newAvatarPath;
+    try {
+      await req.user.save();
+    } catch (error) {
+      await fs.unlink(absolutePath).catch(() => {});
+      throw error;
+    }
+    await removeStoredAvatar(previousAvatarPath, avatarDirectory).catch((error) => console.error('Không thể xóa ảnh đại diện cũ:', error.message));
+    return res.json({ user: toAuthUser(req.user) });
+  } catch (error) {
+    if (newAvatarPath && req.user.avatarPath !== newAvatarPath) await removeStoredAvatar(newAvatarPath, avatarDirectory).catch(() => {});
+    return next(error);
+  }
+});
+
+router.delete('/profile/avatar', requireAuth, async (req, res, next) => {
+  const previousAvatarPath = req.user.avatarPath;
+  req.user.avatarPath = '';
+  try {
+    await req.user.save();
+    await removeStoredAvatar(previousAvatarPath, avatarDirectory).catch((error) => console.error('Không thể xóa ảnh đại diện cũ:', error.message));
+    return res.json({ user: toAuthUser(req.user) });
   } catch (error) {
     return next(error);
   }

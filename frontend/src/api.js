@@ -10,7 +10,9 @@ export class ApiError extends Error {
 
 export async function api(path, options = {}) {
   const headers = new Headers(options.headers || {});
-  if (options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
+  const isBlob = typeof Blob !== 'undefined' && options.body instanceof Blob;
+  if (options.body && !isFormData && !isBlob) headers.set('Content-Type', 'application/json');
 
   const response = await fetch(path, {
     ...options,

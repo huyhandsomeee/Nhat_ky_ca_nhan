@@ -11,6 +11,7 @@ const Draft = require('../models/Draft');
 const { requireAuth, requireProfile } = require('../middleware/auth');
 const { canMessage, normalizeUsernameSearch } = require('../domain/communityRules');
 const eventHub = require('../services/eventHub');
+const { getRelationshipState } = require('../services/communityRelationship');
 
 const router = express.Router();
 router.use(requireAuth, requireProfile);
@@ -39,6 +40,30 @@ router.get('/users', async (req, res, next) => {
   } catch (error) { return next(error); }
 });
 
+router.get('/people/:id/relationship', async (req, res, next) => {
+  if (!validId(req.params.id)) return notFound(res);
+  const currentUserId = req.user._id;
+  const targetUserId = req.params.id;
+  if (String(currentUserId) === String(targetUserId)) return res.json({ relationship: { state: 'self' } });
+  try {
+    const exists = await User.exists({ _id: targetUserId });
+    if (!exists) return notFound(res);
+    const [blocked, friends, pendingRequest] = await Promise.all([
+      Block.exists({ $or: [{ blocker: currentUserId, blocked: targetUserId }, { blocker: targetUserId, blocked: currentUserId }] }),
+      Friendship.exists({ pairKey: sortedPair(currentUserId, targetUserId) }),
+      FriendRequest.findOne({ status: 'pending', $or: [{ sender: currentUserId, recipient: targetUserId }, { sender: targetUserId, recipient: currentUserId }] }).select('_id sender recipient')
+    ]);
+    const relationship = getRelationshipState({
+      currentUserId,
+      targetUserId,
+      blocked: Boolean(blocked),
+      friends: Boolean(friends),
+      pendingRequest: pendingRequest && { id: pendingRequest._id, senderId: pendingRequest.sender }
+    });
+    return res.json({ relationship });
+  } catch (error) { return next(error); }
+});
+
 router.get('/requests', async (req, res, next) => {
   try {
     const [incoming, outgoing] = await Promise.all([
@@ -50,10 +75,12 @@ router.get('/requests', async (req, res, next) => {
 });
 
 router.post('/requests', async (req, res, next) => {
+  const userId = String(req.body?.userId || '').trim();
   const username = normalizeUsernameSearch(req.body?.username);
-  if (!username) return fail(res, 400, 'VALIDATION_ERROR', 'Nhập tên người dùng cần kết bạn.');
+  if (!userId && !username) return fail(res, 400, 'VALIDATION_ERROR', 'Chọn người cần kết bạn.');
+  if (userId && !validId(userId)) return fail(res, 404, 'USER_NOT_FOUND', 'Không tìm thấy người dùng phù hợp.');
   try {
-    const target = await User.findOne({ username });
+    const target = userId ? await User.findById(userId) : await User.findOne({ username });
     if (!target || String(target._id) === String(req.user._id)) return fail(res, 404, 'USER_NOT_FOUND', 'Không tìm thấy người dùng phù hợp.');
     if (await Block.exists({ $or: [{ blocker: req.user._id, blocked: target._id }, { blocker: target._id, blocked: req.user._id }] })) return fail(res, 404, 'USER_NOT_FOUND', 'Không tìm thấy người dùng phù hợp.');
     if (await Friendship.exists({ pairKey: sortedPair(req.user._id, target._id) })) return fail(res, 409, 'ALREADY_FRIENDS', 'Hai bạn đã là bạn bè.');
@@ -91,7 +118,7 @@ router.delete('/requests/:id', async (req, res, next) => {
 
 router.get('/friends', async (req, res, next) => {
   try {
-    const links = await Friendship.find({ users: req.user._id }).populate('users', 'username displayName');
+    const links = await Friendship.find({ users: req.user._id }).populate('users', 'username displayName avatarPath');
     return res.json({ friends: links.map((link) => link.users.find((user) => String(user._id) !== String(req.user._id))).filter(Boolean) });
   } catch (error) { return next(error); }
 });
@@ -131,7 +158,7 @@ router.delete('/blocks/:id', async (req, res, next) => {
 
 router.get('/conversations', async (req, res, next) => {
   try {
-    const conversations = await Conversation.find({ users: req.user._id }).populate('users', 'username displayName').sort({ updatedAt: -1 });
+    const conversations = await Conversation.find({ users: req.user._id }).populate('users', 'username displayName avatarPath').sort({ updatedAt: -1 });
     const items = await Promise.all(conversations.map(async (conversation) => {
       const other = conversation.users.find((user) => String(user._id) !== String(req.user._id));
       if (!other || !await friendshipAndBlock(req.user._id, other._id)) return null;
