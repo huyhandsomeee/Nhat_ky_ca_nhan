@@ -1,12 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const FriendRequest = require('../src/models/FriendRequest');
-const Friendship = require('../src/models/Friendship');
-const Block = require('../src/models/Block');
-const Conversation = require('../src/models/Conversation');
-const Message = require('../src/models/Message');
-const Notification = require('../src/models/Notification');
-const Draft = require('../src/models/Draft');
+const FriendRequest = require('../backend/models/FriendRequest');
+const Friendship = require('../backend/models/Friendship');
+const Block = require('../backend/models/Block');
+const Conversation = require('../backend/models/Conversation');
+const Message = require('../backend/models/Message');
+const Notification = require('../backend/models/Notification');
+const Draft = require('../backend/models/Draft');
 
 const one = '507f1f77bcf86cd799439011';
 const two = '507f191e810c19729de860ea';
@@ -29,7 +29,7 @@ test('messages and notification types reject unsupported values', () => {
 });
 
 test('comments can belong to another comment and store per-user reactions', () => {
-  const Comment = require('../src/models/Comment');
+  const Comment = require('../backend/models/Comment');
   const comment = new Comment({
     content: 'Mình cũng nghĩ vậy.', entry: one, author: two, parentComment: two,
     reactions: [{ user: one, emoji: '❤️' }]

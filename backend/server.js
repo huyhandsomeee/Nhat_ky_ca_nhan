@@ -8,18 +8,18 @@ const helmet = require('helmet');
 const passport = require('passport');
 const fs = require('fs');
 const path = require('path');
-const { configurePassport } = require('./src/auth/passport');
+const { configurePassport } = require('./auth/passport');
 
-const authRoutes = require('./src/routes/apiAuth');
-const entryRoutes = require('./src/routes/entries');
-const publicEntryRoutes = require('./src/routes/publicEntries');
-const communityRoutes = require('./src/routes/community');
+const authRoutes = require('./routes/apiAuth');
+const entryRoutes = require('./routes/entries');
+const publicEntryRoutes = require('./routes/publicEntries');
+const communityRoutes = require('./routes/community');
 
 function createApp(options) {
   configurePassport();
 
   const app = express();
-  const frontendDist = path.join(__dirname, 'dist');
+  const frontendDist = path.join(__dirname, '..', 'dist');
   const mongoDbName = process.env.MONGO_DB_NAME || 'nhat_ky_ca_nhan_v2';
   const sessionStore = options?.sessionStore || MongoStore.create({ mongoUrl: process.env.MONGODB_URI, dbName: mongoDbName, collectionName: 'sessions' });
   const sessionSecret = process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'local-development-secret-change-this');

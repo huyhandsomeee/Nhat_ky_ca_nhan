@@ -2,7 +2,7 @@ const { defineConfig } = require('vite');
 const react = require('@vitejs/plugin-react');
 
 module.exports = defineConfig({
-  root: 'client',
+  root: 'frontend',
   plugins: [react()],
   server: {
     host: '127.0.0.1',

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { validateEntryInput, normalizeEntryInput, canReadEntry, canDeleteComment } = require('../src/domain/entryRules');
+const { validateEntryInput, normalizeEntryInput, canReadEntry, canDeleteComment } = require('../backend/domain/entryRules');
 
 const today = '2026-10-22';
 

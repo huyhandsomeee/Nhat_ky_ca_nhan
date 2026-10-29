@@ -1,6 +1,14 @@
 # Nhật ký cá nhân
 
-Website viết và chia sẻ nhật ký, dùng React/Vite, Express và MongoDB. Người dùng có thể đăng ký tài khoản bằng tên đăng nhập & mật khẩu, chọn biệt danh riêng, rồi quyết định bài nào chỉ mình xem và bài nào được chia sẻ.
+Website viết và chia sẻ nhật ký, dùng React/Vite, Express và MongoDB. Mã nguồn được chia thành `frontend/` cho giao diện và `backend/` cho API, xác thực, mô hình dữ liệu và nghiệp vụ. Người dùng có thể đăng ký tài khoản bằng tên đăng nhập & mật khẩu, chọn biệt danh riêng, rồi quyết định bài nào chỉ mình xem và bài nào được chia sẻ.
+
+## Cấu trúc dự án
+
+- `frontend/`: giao diện React, stylesheet và cấu hình trang Vite.
+- `backend/`: Express server cùng các route API, model MongoDB, middleware, xác thực và logic nghiệp vụ.
+- `test/`: kiểm thử cho backend và frontend.
+- `dist/`: thư mục frontend được tạo khi chạy lệnh build; Express dùng thư mục này để phục vụ ứng dụng ở chế độ production.
+- `vite.config.js`, `package.json`: cấu hình Vite và các lệnh chạy dự án ở thư mục gốc.
 
 ## Chức năng
 
@@ -22,32 +30,40 @@ Website viết và chia sẻ nhật ký, dùng React/Vite, Express và MongoDB. 
 - Node.js 20.19 trở lên.
 - MongoDB local hoặc MongoDB Atlas.
 
-## Cấu hình local
+## Cài đặt và cấu hình
 
-1. Cài dependency:
+Chạy các lệnh sau từ thư mục gốc của dự án (thư mục có `package.json`):
 
-   ```powershell
-   npm install
-   ```
+```powershell
+npm install
+```
 
-2. Cấu hình file `.env`:
+Tạo file `.env` từ mẫu `.env.example`, sau đó cập nhật cấu hình MongoDB và session secret:
 
-   ```env
-   PORT=3000
-   MONGODB_URI=mongodb://127.0.0.1:27017/nhat_ky_ca_nhan
-   MONGO_DB_NAME=nhat_ky_ca_nhan
-   SESSION_SECRET=thay-bang-mot-chuoi-bi-mat-dai-va-ngau-nhien
-   NODE_ENV=development
-   FRONTEND_URL=http://localhost:5173
-   ```
+```powershell
+Copy-Item .env.example .env
+```
+
+Các giá trị mẫu trong `.env`:
+
+```env
+PORT=3000
+MONGODB_URI=mongodb://127.0.0.1:27017/nhat_ky_ca_nhan
+MONGO_DB_NAME=nhat_ky_ca_nhan
+SESSION_SECRET=thay-bang-mot-chuoi-bi-mat-dai-va-ngau-nhien
+NODE_ENV=development
+FRONTEND_URL=http://localhost:5173
+```
 
 ## Chạy ứng dụng
 
-Khi phát triển, mở hai terminal tại thư mục project:
+Khi phát triển, mở hai terminal tại thư mục gốc. Terminal thứ nhất chạy backend Express từ `backend/server.js`:
 
 ```powershell
 npm run dev:server
 ```
+
+Terminal thứ hai chạy frontend Vite với thư mục gốc là `frontend/`:
 
 ```powershell
 npm run dev
@@ -55,7 +71,7 @@ npm run dev
 
 Mở <http://localhost:5173>. Vite chuyển tiếp `/api` tới Express ở cổng 3000.
 
-Để chạy bản build bằng một server Express:
+Để tạo frontend production trong `dist/` và chạy cả frontend lẫn API qua Express:
 
 ```powershell
 npm run build

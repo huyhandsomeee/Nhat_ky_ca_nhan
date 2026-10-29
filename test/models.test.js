@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const bcrypt = require('bcryptjs');
-const Entry = require('../src/models/Entry');
-const User = require('../src/models/User');
-const Comment = require('../src/models/Comment');
+const Entry = require('../backend/models/Entry');
+const User = require('../backend/models/User');
+const Comment = require('../backend/models/Comment');
 
 test('entry documents keep diary date, optional mood/tags, and private visibility by default', () => {
   const entry = new Entry({

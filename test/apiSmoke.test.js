@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const session = require('express-session');
-const { createApp } = require('../server');
+const { createApp } = require('../backend/server');
 
 test('API reports session state and protects personal journal routes', async (t) => {
   assert.equal(createApp.length, 1, 'createApp should accept an isolated session-store option');

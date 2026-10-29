@@ -5,7 +5,7 @@ const {
   canInteractWithEntry,
   normalizeReaction,
   normalizeUsernameSearch
-} = require('../src/domain/communityRules');
+} = require('../backend/domain/communityRules');
 
 test('messaging is allowed only between friends who have not blocked each other', () => {
   assert.equal(canMessage({ areFriends: true, blocked: false }), true);
