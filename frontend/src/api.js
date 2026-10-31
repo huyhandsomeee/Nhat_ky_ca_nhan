@@ -8,13 +8,19 @@ export class ApiError extends Error {
   }
 }
 
+const API_ORIGIN = __API_ORIGIN__;
+
+export function apiUrl(path) {
+  return `${API_ORIGIN}${path}`;
+}
+
 export async function api(path, options = {}) {
   const headers = new Headers(options.headers || {});
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
   const isBlob = typeof Blob !== 'undefined' && options.body instanceof Blob;
   if (options.body && !isFormData && !isBlob) headers.set('Content-Type', 'application/json');
 
-  const response = await fetch(path, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     headers,
     credentials: 'include'

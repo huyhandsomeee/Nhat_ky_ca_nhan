@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { api, jsonBody } from './api';
+import { api, apiUrl, jsonBody } from './api';
 import { canComment } from './commentPermissions.mjs';
 
 const REACTIONS = ['👍', '❤️', '😂', '😮', '😢', '🙏'];
@@ -111,7 +111,7 @@ function Header() {
     if (!user || user.needsProfileSetup) { setUnreadCount(0); return; }
     let active = true;
     api('/api/community/notifications').then((data) => { if (active) setUnreadCount(location.pathname === '/community' ? 0 : data.unreadCount || 0); }).catch(() => {});
-    const events = new EventSource('/api/community/events');
+    const events = new EventSource(apiUrl('/api/community/events'), { withCredentials: true });
     events.addEventListener('notification:new', () => setUnreadCount((count) => count + 1));
     const clearUnread = () => setUnreadCount(0);
     window.addEventListener('community:notifications-read', clearUnread);
@@ -153,7 +153,7 @@ function Header() {
 
 function UserAvatar({ src, name, className = '' }) {
   return <span className={`user-avatar ${className}`} aria-hidden="true">
-    {src ? <img src={src} alt="" /> : <span>{(name || 'N').trim().slice(0, 1).toLocaleUpperCase('vi-VN')}</span>}
+    {src ? <img src={src.startsWith('/api/') ? apiUrl(src) : src} alt="" /> : <span>{(name || 'N').trim().slice(0, 1).toLocaleUpperCase('vi-VN')}</span>}
   </span>;
 }
 
@@ -348,7 +348,7 @@ function CommunityPage() {
   }, [query]);
 
   useEffect(() => {
-    const events = new EventSource('/api/community/events');
+    const events = new EventSource(apiUrl('/api/community/events'), { withCredentials: true });
     events.addEventListener('message:new', (event) => {
       const data = JSON.parse(event.data);
       if (activeConversation?._id === data.conversationId) {
@@ -959,7 +959,7 @@ function PublicProfilePage() {
 
   useEffect(() => {
     if (!user || relationship?.state !== 'outgoing') return;
-    const events = new EventSource('/api/community/events');
+    const events = new EventSource(apiUrl('/api/community/events'), { withCredentials: true });
     const refreshRelationship = (event) => {
       if (JSON.parse(event.data).type !== 'friend_accepted') return;
       api(`/api/community/people/${id}/relationship`)

@@ -1,14 +1,14 @@
 # Nhật ký cá nhân
 
-Website viết và chia sẻ nhật ký, dùng React/Vite, Express và MongoDB. Mã nguồn được chia thành `frontend/` cho giao diện và `backend/` cho API, xác thực, mô hình dữ liệu và nghiệp vụ. Người dùng có thể đăng ký tài khoản bằng tên đăng nhập & mật khẩu, chọn biệt danh riêng, rồi quyết định bài nào chỉ mình xem và bài nào được chia sẻ.
+Website viết và chia sẻ nhật ký, dùng React, Rolldown, Express và MongoDB. Mã nguồn được chia thành `frontend/` cho giao diện và `backend/` cho API, xác thực, mô hình dữ liệu và nghiệp vụ. Người dùng có thể đăng ký tài khoản bằng tên đăng nhập & mật khẩu, chọn biệt danh riêng, rồi quyết định bài nào chỉ mình xem và bài nào được chia sẻ.
 
 ## Cấu trúc dự án
 
-- `frontend/`: giao diện React, stylesheet và cấu hình trang Vite.
+- `frontend/`: giao diện React, entry `src/index.js` và stylesheet.
 - `backend/`: Express server cùng các route API, model MongoDB, middleware, xác thực và logic nghiệp vụ.
 - `test/`: kiểm thử cho backend và frontend.
 - `dist/`: thư mục frontend được tạo khi chạy lệnh build; Express dùng thư mục này để phục vụ ứng dụng ở chế độ production.
-- `vite.config.js`, `package.json`: cấu hình Vite và các lệnh chạy dự án ở thư mục gốc.
+- `package.json`: các lệnh chạy dự án ở thư mục gốc.
 
 ## Chức năng
 
@@ -52,7 +52,7 @@ MONGODB_URI=mongodb://127.0.0.1:27017/nhat_ky_ca_nhan
 MONGO_DB_NAME=nhat_ky_ca_nhan
 SESSION_SECRET=thay-bang-mot-chuoi-bi-mat-dai-va-ngau-nhien
 NODE_ENV=development
-FRONTEND_URL=http://localhost:5173
+FRONTEND_ORIGIN=http://localhost:5174
 ```
 
 ## Chạy ứng dụng
@@ -63,13 +63,13 @@ Khi phát triển, mở hai terminal tại thư mục gốc. Terminal thứ nh�
 npm run dev:server
 ```
 
-Terminal thứ hai chạy frontend Vite với thư mục gốc là `frontend/`:
+Terminal thứ hai chạy server frontend và bundler Rolldown:
 
 ```powershell
 npm run dev
 ```
 
-Mở <http://localhost:5173>. Vite chuyển tiếp `/api` tới Express ở cổng 3000.
+Mở <http://localhost:5174>. Frontend gọi API Express ở cổng 3000.
 
 Để tạo frontend production trong `dist/` và chạy cả frontend lẫn API qua Express:
 
