@@ -5,7 +5,7 @@ import { canComment } from '../commentPermissions.mjs';
 import { useAuth } from '../auth/AuthContext';
 import { InlineError, Loading, UserAvatar } from '../components/ui';
 import FollowButton from '../components/FollowButton';
-import { MOOD_EMOJI, REACTIONS, capitalize, formatDay, formatLongDate, formatTimestamp, getCommentDepth } from '../shared/entryUtils';
+import { MOOD_EMOJI, REACTIONS, capitalize, formatCompactMonthYear, formatDay, formatLongDate, formatShortWeekday, formatTimestamp, getCommentDepth } from '../shared/entryUtils';
 import { getDailyPrompt } from '../shared/dailyPrompt';
 
 export default function EntryDetailPage({ publicPage = false }) {
@@ -137,7 +137,7 @@ export default function EntryDetailPage({ publicPage = false }) {
   const detailContent = <>
     <Link className="back-link" to={backPath}>← {publicPage ? 'Góc chia sẻ' : 'Sổ của tôi'}</Link>
     <header className="detail-header">
-      <div className="detail-date"><span>{formatDay(entry.journalDate)}</span><small>{formatLongDate(entry.journalDate)}</small></div>
+      <time className="detail-date" dateTime={entry.journalDate}><span>{formatDay(entry.journalDate)}</span><small>{formatShortWeekday(entry.journalDate)}</small><small>{formatCompactMonthYear(entry.journalDate)}</small></time>
       <div className="detail-title-block">
         <div className="detail-labels"><span className={`privacy-pill ${entry.visibility}`}>{entry.visibility === 'public' ? 'Đang chia sẻ' : 'Chỉ mình tôi'}</span>{entry.mood && (publicPage ? <span className="public-detail-mood"><span aria-hidden="true">{MOOD_EMOJI[entry.mood] || '💭'}</span> {capitalize(entry.mood)}</span> : <p className="mood-byline"><UserAvatar src={isOwner ? user?.avatarUrl : entry.author?.avatarPath} name={authorName} className="mood-byline-avatar" /><strong>{authorName}</strong> đang cảm thấy <span className="mood-byline-icon" aria-hidden="true">{MOOD_EMOJI[entry.mood] || '💭'}</span><strong>{capitalize(entry.mood)}</strong></p>)}</div>
         <h1>{entry.title}</h1>

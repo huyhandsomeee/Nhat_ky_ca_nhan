@@ -32,6 +32,17 @@ export function formatLongDate(value) {
   return new Intl.DateTimeFormat('vi-VN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
 }
 
+export function formatShortWeekday(value) {
+  if (!value) return '';
+  return new Intl.DateTimeFormat('vi-VN', { weekday: 'short' }).format(new Date(`${value}T12:00:00`));
+}
+
+export function formatCompactMonthYear(value) {
+  if (!value) return '';
+  const [, year, month] = String(value).match(/^(\d{4})-(\d{2})/) || [];
+  return year && month ? `${month}/${year}` : '';
+}
+
 export function formatTimestamp(value) {
   if (!value) return '';
   return new Intl.DateTimeFormat('vi-VN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(value));
