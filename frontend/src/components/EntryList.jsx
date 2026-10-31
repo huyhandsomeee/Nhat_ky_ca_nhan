@@ -73,7 +73,7 @@ function EntryRow({ entry, publicPage, displayName, onSaveChange }) {
   return <article className="entry-row">
     <div className="entry-date"><span>{formatDay(entry.journalDate)}</span><small>{formatMonthYear(entry.journalDate)}</small></div>
     <div className="entry-row-body">
-      <div className="entry-row-title"><h3><Link to={entryUrl}>{entry.title}</Link></h3>{entry.mood && <span className="entry-row-mood"><span aria-hidden="true">{MOOD_EMOJI[entry.mood] || '💭'}</span><strong>{authorName}</strong> đang cảm thấy <strong>{capitalize(entry.mood)}</strong></span>}<span className={`visibility-mark ${entry.visibility}`} title={entry.visibility === 'public' ? 'Công khai' : 'Riêng tư'}>{entry.visibility === 'public' ? '◉' : '◌'}</span></div>
+      <div className="entry-row-title"><h3><Link to={entryUrl}>{entry.title}</Link></h3><span className={`entry-visibility-note ${entry.visibility}`}><span aria-hidden="true">{entry.visibility === 'public' ? '◉' : '◌'}</span>{entry.visibility === 'public' ? 'Công khai' : 'Riêng tư'}</span>{entry.mood && <span className="entry-row-mood"><span aria-hidden="true">{MOOD_EMOJI[entry.mood] || '💭'}</span><strong>{authorName}</strong> đang cảm thấy <strong>{capitalize(entry.mood)}</strong></span>}</div>
       {entry.author?._id && String(entry.author._id) !== String(user?.id) && <p className="entry-shared-by">Được chia sẻ bởi <Link to={`/people/${entry.author._id}`}>{authorName}</Link></p>}
       <p className="entry-excerpt">{entry.content}</p>
       <div className="entry-meta">{(entry.tags || []).map((tag) => <span className="tag" key={tag}>#{tag}</span>)}</div>
