@@ -6,8 +6,11 @@ Website quản lý nhật ký cá nhân, dùng React, Rolldown, Express và Mong
 
 - `frontend/`: giao diện React, entry `src/index.js` và stylesheet.
 - `backend/`: Express server cùng các route API, model MongoDB, middleware, xác thực và logic nghiệp vụ.
-- `test/`: kiểm thử cho backend và frontend.
-- `dist/`: thư mục frontend được tạo khi chạy lệnh build; Express dùng thư mục này để phục vụ ứng dụng ở chế độ production.
+- `scripts/`: script chạy máy chủ frontend phát triển và đóng gói bản production.
+- `test/`: kiểm thử API, model và logic nghiệp vụ.
+- `uploads/avatars/`: ảnh đại diện người dùng tải lên; đây là dữ liệu ứng dụng, không phải file build.
+- `node_modules/`: dependencies được cài từ `package-lock.json` bằng `npm install`.
+- `frontend/.dev-assets/` và `dist/`: tài nguyên frontend sinh tự động; thư mục đầu được tạo khi chạy `npm run dev`, thư mục sau khi chạy `npm run build`. Không chỉnh sửa trực tiếp các file trong hai thư mục này. `npm start` cần có `dist/`, vì vậy hãy chạy build trước khi khởi động production.
 - `package.json`: các lệnh chạy dự án ở thư mục gốc.
 
 ## Chức năng
