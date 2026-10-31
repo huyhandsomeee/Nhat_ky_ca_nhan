@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
-import { formatDay, formatMonthYear } from '../shared/entryUtils';
+import { MOOD_EMOJI, capitalize, formatDay, formatMonthYear } from '../shared/entryUtils';
 import { UserAvatar } from './ui';
 
 export function EntryList({ entries, publicPage = false, displayName }) {

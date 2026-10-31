@@ -1,6 +1,8 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { api, jsonBody } from '../api';
 
+const AuthContext = createContext(null);
+
 export function AuthProvider({ children }) {
   const [auth, setAuth] = useState({ user: null, loading: true });
 
