@@ -8,6 +8,7 @@ const schema = new mongoose.Schema({
   journalDate: { type: String, default: '' },
   mood: { type: String, enum: [null, ...MOODS], default: null },
   tags: { type: [{ type: String, trim: true, maxlength: 30 }], default: [] },
+  taggedUsers: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], default: [] },
   visibility: { type: String, enum: ['private', 'public'], default: 'private' }
 }, { timestamps: true });
 

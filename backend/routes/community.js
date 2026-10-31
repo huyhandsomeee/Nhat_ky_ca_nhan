@@ -9,7 +9,7 @@ const Message = require('../models/Message');
 const Notification = require('../models/Notification');
 const Draft = require('../models/Draft');
 const { requireAuth, requireProfile } = require('../middleware/auth');
-const { canMessage, normalizeUsernameSearch } = require('../domain/communityRules');
+const { normalizeUsernameSearch } = require('../domain/communityRules');
 const eventHub = require('../services/eventHub');
 const { getRelationshipState } = require('../services/communityRelationship');
 
@@ -101,6 +101,7 @@ router.post('/requests/:id/accept', async (req, res, next) => {
     const pairKey = sortedPair(request.sender, request.recipient);
     const users = [request.sender, request.recipient].sort((a, b) => String(a).localeCompare(String(b)));
     await Friendship.updateOne({ pairKey }, { $setOnInsert: { users, pairKey, createdBy: req.user._id } }, { upsert: true });
+    await Conversation.updateOne({ pairKey }, { $set: { status: 'accepted', acceptedAt: new Date() } });
     await Notification.create({ recipient: request.sender, actor: req.user._id, type: 'friend_accepted', reference: request._id });
     eventHub.publish(request.sender, 'notification:new', { type: 'friend_accepted', actor: { displayName: req.user.displayName || req.user.username } });
     return res.json({ accepted: true });
@@ -161,9 +162,13 @@ router.get('/conversations', async (req, res, next) => {
     const conversations = await Conversation.find({ users: req.user._id }).populate('users', 'username displayName avatarPath').sort({ updatedAt: -1 });
     const items = await Promise.all(conversations.map(async (conversation) => {
       const other = conversation.users.find((user) => String(user._id) !== String(req.user._id));
-      if (!other || !await friendshipAndBlock(req.user._id, other._id)) return null;
-      const lastMessage = await Message.findOne({ conversation: conversation._id }).sort({ createdAt: -1 });
-      return { _id: conversation._id, user: other, lastMessage };
+      if (!other || await isBlocked(req.user._id, other._id)) return null;
+      const [lastMessage, unreadCount] = await Promise.all([
+        Message.findOne({ conversation: conversation._id }).sort({ createdAt: -1 }),
+        Message.countDocuments({ conversation: conversation._id, sender: { $ne: req.user._id }, readAt: null })
+      ]);
+      if (conversation.status === 'pending' && String(conversation.requestedBy) !== String(req.user._id) && !lastMessage) return null;
+      return { _id: conversation._id, user: other, lastMessage, unreadCount, status: conversation.status, requestedBy: conversation.requestedBy, acceptedAt: conversation.acceptedAt };
     }));
     return res.json({ conversations: items.filter(Boolean) });
   } catch (error) { return next(error); }
@@ -172,12 +177,33 @@ router.get('/conversations', async (req, res, next) => {
 router.post('/conversations/:userId', async (req, res, next) => {
   if (!validId(req.params.userId)) return notFound(res);
   try {
-    const relation = await friendshipAndBlock(req.user._id, req.params.userId);
-    if (!relation) return fail(res, 403, 'FRIENDS_ONLY', 'Chỉ bạn bè mới có thể trò chuyện.');
+    if (String(req.user._id) === String(req.params.userId) || !await User.exists({ _id: req.params.userId })) return notFound(res);
+    if (await isBlocked(req.user._id, req.params.userId)) return fail(res, 403, 'USER_UNAVAILABLE', 'Không thể gửi tin nhắn cho tài khoản này.');
+    const areFriends = Boolean(await Friendship.exists({ pairKey: sortedPair(req.user._id, req.params.userId) }));
     const pairKey = sortedPair(req.user._id, req.params.userId);
     const users = [req.user._id, req.params.userId].sort((a, b) => String(a).localeCompare(String(b)));
-    const conversation = await Conversation.findOneAndUpdate({ pairKey }, { $setOnInsert: { users, pairKey } }, { upsert: true, new: true, setDefaultsOnInsert: true });
+    const conversation = await Conversation.findOneAndUpdate({ pairKey }, { $setOnInsert: { users, pairKey, status: areFriends ? 'accepted' : 'pending', requestedBy: areFriends ? null : req.user._id } }, { upsert: true, new: true, setDefaultsOnInsert: true });
+    if (areFriends && conversation.status === 'pending') {
+      conversation.status = 'accepted';
+      conversation.acceptedAt = new Date();
+      await conversation.save();
+    }
     return res.json({ conversation });
+  } catch (error) { return next(error); }
+});
+
+router.post('/conversations/:id/accept', async (req, res, next) => {
+  if (!validId(req.params.id)) return notFound(res);
+  try {
+    const conversation = await Conversation.findOne({ _id: req.params.id, users: req.user._id, status: 'pending' });
+    if (!conversation || String(conversation.requestedBy) === String(req.user._id)) return notFound(res);
+    if (await isBlocked(conversation.users[0], conversation.users[1])) return fail(res, 403, 'USER_UNAVAILABLE', 'Không thể chấp nhận lời nhắn này.');
+    if (!await Message.exists({ conversation: conversation._id })) return fail(res, 409, 'MESSAGE_REQUIRED', 'Hãy chờ tin nhắn mở đầu trước khi chấp nhận.');
+    conversation.status = 'accepted';
+    conversation.acceptedAt = new Date();
+    await conversation.save();
+    eventHub.publish(conversation.requestedBy, 'conversation:accepted', { conversationId: String(conversation._id) });
+    return res.json({ accepted: true });
   } catch (error) { return next(error); }
 });
 
@@ -186,6 +212,7 @@ router.get('/conversations/:id/messages', async (req, res, next) => {
   try {
     const conversation = await authorizedConversation(req.params.id, req.user._id);
     if (!conversation) return fail(res, 404, 'CONVERSATION_NOT_FOUND', 'Không tìm thấy cuộc trò chuyện.');
+    await Message.updateMany({ conversation: conversation._id, sender: { $ne: req.user._id }, readAt: null }, { readAt: new Date() });
     const messages = await Message.find({ conversation: conversation._id }).populate('sender', 'displayName username').sort({ createdAt: -1 }).limit(100);
     return res.json({ messages: messages.reverse() });
   } catch (error) { return next(error); }
@@ -199,8 +226,10 @@ router.post('/conversations/:id/messages', async (req, res, next) => {
     const conversation = await authorizedConversation(req.params.id, req.user._id);
     if (!conversation) return fail(res, 404, 'CONVERSATION_NOT_FOUND', 'Không tìm thấy cuộc trò chuyện.');
     const otherId = conversation.users.find((id) => String(id) !== String(req.user._id));
-    const relation = await friendshipAndBlock(req.user._id, otherId);
-    if (!canMessage({ areFriends: relation, blocked: !relation })) return fail(res, 403, 'FRIENDS_ONLY', 'Chỉ bạn bè mới có thể trò chuyện.');
+    if (conversation.status === 'pending') {
+      const isFirstRequestMessage = String(conversation.requestedBy) === String(req.user._id) && !await Message.exists({ conversation: conversation._id });
+      if (!isFirstRequestMessage) return fail(res, 403, 'MESSAGE_REQUEST_PENDING', 'Người nhận cần chấp nhận lời nhắn trước khi hai bạn có thể nhắn tiếp.');
+    }
     const message = await Message.create({ conversation: conversation._id, sender: req.user._id, content });
     await message.populate('sender', 'displayName username');
     conversation.updatedAt = new Date();
@@ -214,7 +243,10 @@ router.post('/conversations/:id/messages', async (req, res, next) => {
 
 router.get('/notifications', async (req, res, next) => {
   try {
-    const notifications = await Notification.find({ recipient: req.user._id }).populate('actor', 'username displayName').sort({ createdAt: -1 }).limit(50);
+    const notifications = await Notification.find({ recipient: req.user._id })
+      .populate('actor', 'username displayName')
+      .populate('entry', 'title visibility')
+      .sort({ createdAt: -1 }).limit(50);
     const unreadCount = await Notification.countDocuments({ recipient: req.user._id, readAt: null });
     return res.json({ notifications, unreadCount });
   } catch (error) { return next(error); }
@@ -234,8 +266,9 @@ router.put('/draft', async (req, res, next) => {
   const data = req.body || {};
   const draft = {
     title: String(data.title || '').slice(0, 120), content: String(data.content || '').slice(0, 10000),
-    journalDate: String(data.journalDate || ''), mood: data.mood || null,
+      journalDate: String(data.journalDate || ''), mood: data.mood || null,
     tags: Array.isArray(data.tags) ? data.tags.slice(0, 20).map((tag) => String(tag).trim().slice(0, 30)) : [],
+      taggedUsers: Array.isArray(data.taggedUsers) ? data.taggedUsers.filter(validId).slice(0, 20) : [],
     visibility: data.visibility === 'public' ? 'public' : 'private'
   };
   try {
@@ -249,20 +282,16 @@ router.delete('/draft', async (req, res, next) => {
   catch (error) { return next(error); }
 });
 
-async function friendshipAndBlock(first, second) {
-  const [friendship, block] = await Promise.all([
-    Friendship.exists({ pairKey: sortedPair(first, second) }),
-    Block.exists({ $or: [{ blocker: first, blocked: second }, { blocker: second, blocked: first }] })
-  ]);
-  return Boolean(friendship && !block);
-}
-
 async function authorizedConversation(id, userId) {
   const conversation = await Conversation.findOne({ _id: id, users: userId });
   if (!conversation) return null;
   const other = conversation.users.find((item) => String(item) !== String(userId));
-  if (!other || !await friendshipAndBlock(userId, other)) return null;
+  if (!other || await isBlocked(userId, other)) return null;
   return conversation;
+}
+
+async function isBlocked(first, second) {
+  return Boolean(await Block.exists({ $or: [{ blocker: first, blocked: second }, { blocker: second, blocked: first }] }));
 }
 
 function sortedPair(first, second) { return [String(first), String(second)].sort().join(':'); }

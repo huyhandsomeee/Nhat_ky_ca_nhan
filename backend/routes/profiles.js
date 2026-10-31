@@ -12,9 +12,10 @@ router.get('/:id', async (req, res, next) => {
   try {
     const user = await User.findById(req.params.id).select('username displayName bio avatarPath').lean();
     if (!user) return notFound(res);
-    const entries = await Entry.find({ author: user._id, visibility: 'public' })
-      .select('title content journalDate mood tags visibility createdAt author')
+    const entries = await Entry.find({ visibility: 'public', $or: [{ author: user._id }, { taggedUsers: user._id }] })
+      .select('title content journalDate mood tags taggedUsers visibility createdAt author')
       .populate('author', 'displayName avatarPath')
+      .populate('taggedUsers', 'username displayName')
       .sort({ journalDate: -1, createdAt: -1 })
       .limit(50)
       .lean();

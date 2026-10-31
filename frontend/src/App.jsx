@@ -103,19 +103,20 @@ function PrivateRoute({ children }) {
 function Header() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [logoutError, setLogoutError] = useState('');
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     if (!user || user.needsProfileSetup) { setUnreadCount(0); return; }
     let active = true;
-    api('/api/community/notifications').then((data) => { if (active) setUnreadCount(data.unreadCount || 0); }).catch(() => {});
+    api('/api/community/notifications').then((data) => { if (active) setUnreadCount(location.pathname === '/community' ? 0 : data.unreadCount || 0); }).catch(() => {});
     const events = new EventSource('/api/community/events');
     events.addEventListener('notification:new', () => setUnreadCount((count) => count + 1));
     const clearUnread = () => setUnreadCount(0);
     window.addEventListener('community:notifications-read', clearUnread);
     return () => { active = false; events.close(); window.removeEventListener('community:notifications-read', clearUnread); };
-  }, [user?.id, user?.needsProfileSetup]);
+  }, [user?.id, user?.needsProfileSetup, location.pathname]);
 
   async function handleLogout() {
     setLogoutError('');
@@ -160,6 +161,7 @@ function ExplorePage() {
   const [entries, setEntries] = useState([]);
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
+  const [tagSuggestions, setTagSuggestions] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
 
@@ -174,9 +176,26 @@ function ExplorePage() {
     return () => { active = false; };
   }, [query]);
 
+  useEffect(() => {
+    const fragment = getActiveHashtag(search);
+    if (fragment === null) { setTagSuggestions([]); return; }
+    let active = true;
+    const timer = setTimeout(() => api(`/api/public/entries/tags/suggestions?q=${encodeURIComponent(fragment)}`)
+      .then(({ suggestions }) => { if (active) setTagSuggestions(suggestions); })
+      .catch(() => { if (active) setTagSuggestions([]); }), 120);
+    return () => { active = false; clearTimeout(timer); };
+  }, [search]);
+
   function submitSearch(event) {
     event.preventDefault();
     setQuery(search.trim());
+  }
+
+  function chooseTagSuggestion(tag) {
+    const value = replaceActiveHashtag(search, tag);
+    setSearch(value);
+    setQuery(value.trim());
+    setTagSuggestions([]);
   }
 
   return <>
@@ -194,7 +213,9 @@ function ExplorePage() {
         <div><p className="eyebrow">Bài viết công khai</p><h2 id="explore-heading">Gần đây được viết</h2></div>
         <form className="search-form" onSubmit={submitSearch} role="search">
           <label className="sr-only" htmlFor="explore-search">Tìm trong bài công khai</label>
-          <input id="explore-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm một từ, một ngày..." />
+          <div className="search-input-wrap"><input id="explore-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm nội dung hoặc #hashtag..." aria-controls="explore-tag-suggestions" aria-expanded={getActiveHashtag(search) !== null && tagSuggestions.length > 0} />
+            {getActiveHashtag(search) !== null && !!tagSuggestions.length && <div id="explore-tag-suggestions" className="hashtag-suggestions" role="listbox" aria-label="Hashtag đang được sử dụng">{tagSuggestions.map(({ tag, uses }) => <button type="button" role="option" aria-selected="false" key={tag} onMouseDown={(event) => event.preventDefault()} onClick={() => chooseTagSuggestion(tag)}><span>#{tag}</span><small>{uses}</small></button>)}</div>}
+          </div>
           <button className="search-button" type="submit" aria-label="Tìm kiếm">⌕</button>
         </form>
       </div>
@@ -210,6 +231,7 @@ function MyDiaryPage() {
   const [entries, setEntries] = useState([]);
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
+  const [tagSuggestions, setTagSuggestions] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
 
@@ -224,9 +246,26 @@ function MyDiaryPage() {
     return () => { active = false; };
   }, [query]);
 
+  useEffect(() => {
+    const fragment = getActiveHashtag(search);
+    if (fragment === null) { setTagSuggestions([]); return; }
+    let active = true;
+    const timer = setTimeout(() => api(`/api/entries/tags/suggestions?q=${encodeURIComponent(fragment)}`)
+      .then(({ suggestions }) => { if (active) setTagSuggestions(suggestions); })
+      .catch(() => { if (active) setTagSuggestions([]); }), 120);
+    return () => { active = false; clearTimeout(timer); };
+  }, [search]);
+
   function submitSearch(event) {
     event.preventDefault();
     setQuery(search.trim());
+  }
+
+  function chooseTagSuggestion(tag) {
+    const value = replaceActiveHashtag(search, tag);
+    setSearch(value);
+    setQuery(value.trim());
+    setTagSuggestions([]);
   }
 
   return <>
@@ -239,7 +278,9 @@ function MyDiaryPage() {
         <div><p className="eyebrow">Những trang của bạn</p><h2 id="diary-list-heading">Gần đây</h2></div>
         <form className="search-form" onSubmit={submitSearch} role="search">
           <label className="sr-only" htmlFor="diary-search">Tìm trong nhật ký của tôi</label>
-          <input id="diary-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm trong nhật ký..." />
+          <div className="search-input-wrap"><input id="diary-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Tìm nội dung hoặc #hashtag..." aria-controls="diary-tag-suggestions" aria-expanded={getActiveHashtag(search) !== null && tagSuggestions.length > 0} />
+            {getActiveHashtag(search) !== null && !!tagSuggestions.length && <div id="diary-tag-suggestions" className="hashtag-suggestions" role="listbox" aria-label="Hashtag đang được sử dụng">{tagSuggestions.map(({ tag, uses }) => <button type="button" role="option" aria-selected="false" key={tag} onMouseDown={(event) => event.preventDefault()} onClick={() => chooseTagSuggestion(tag)}><span>#{tag}</span><small>{uses}</small></button>)}</div>}
+          </div>
           <button className="search-button" type="submit" aria-label="Tìm kiếm">⌕</button>
         </form>
       </div>
@@ -252,6 +293,7 @@ function MyDiaryPage() {
 
 function CommunityPage() {
   const { user } = useAuth();
+  const location = useLocation();
   const [query, setQuery] = useState('');
   const [users, setUsers] = useState([]);
   const [friends, setFriends] = useState([]);
@@ -273,11 +315,26 @@ function CommunityPage() {
     setFriends(friendData.friends);
     setRequests(requestData);
     setConversations(conversationData.conversations);
-    setNotifications(notificationData.notifications);
+    setActiveConversation((current) => {
+      if (!current) return current;
+      const updated = conversationData.conversations.find((item) => String(item._id) === String(current._id));
+      return updated ? { ...current, status: updated.status, requestedBy: updated.requestedBy } : current;
+    });
+    const viewedAt = new Date().toISOString();
+    if (notificationData.unreadCount > 0) {
+      await api('/api/community/notifications/read', { method: 'POST' });
+      window.dispatchEvent(new Event('community:notifications-read'));
+    }
+    setNotifications(notificationData.notifications.map((item) => item.readAt ? item : { ...item, readAt: viewedAt }));
     setBlocks(blockData.blocks);
   }
 
   useEffect(() => { loadCommunity().catch((reason) => setError(reason.message)); }, []);
+
+  useEffect(() => {
+    const friend = location.state?.openChatUser;
+    if (friend) openConversation(friend);
+  }, [location.key]);
 
   useEffect(() => {
     const normalized = query.trim();
@@ -294,10 +351,16 @@ function CommunityPage() {
     const events = new EventSource('/api/community/events');
     events.addEventListener('message:new', (event) => {
       const data = JSON.parse(event.data);
-      if (activeConversation?._id === data.conversationId) setMessages((current) => current.some((item) => item._id === data.message._id) ? current : [...current, data.message]);
-      loadCommunity().catch(() => {});
+      if (activeConversation?._id === data.conversationId) {
+        api(`/api/community/conversations/${data.conversationId}/messages`)
+          .then((result) => { setMessages(result.messages); return loadCommunity(); })
+          .catch(() => {});
+      } else {
+        loadCommunity().catch(() => {});
+      }
     });
     events.addEventListener('notification:new', () => loadCommunity().catch(() => {}));
+    events.addEventListener('conversation:accepted', () => loadCommunity().catch(() => {}));
     return () => events.close();
   }, [activeConversation?._id]);
 
@@ -323,7 +386,12 @@ function CommunityPage() {
     setError('');
     try {
       const { conversation } = await api(`/api/community/conversations/${friend._id}`, { method: 'POST' });
-      setActiveConversation({ _id: conversation._id, user: friend });
+      setActiveConversation({ ...conversation, user: friend, unreadCount: 0 });
+      setConversations((current) => {
+        const exists = current.some((item) => String(item.user?._id) === String(friend._id));
+        const opened = { ...conversation, user: friend, unreadCount: 0 };
+        return exists ? current.map((item) => String(item.user?._id) === String(friend._id) ? { ...item, unreadCount: 0, status: conversation.status, requestedBy: conversation.requestedBy } : item) : [opened, ...current];
+      });
     } catch (reason) { setError(reason.message); }
   }
 
@@ -345,13 +413,26 @@ function CommunityPage() {
       const { message } = await api(`/api/community/conversations/${activeConversation._id}/messages`, { method: 'POST', body: jsonBody({ content: messageText }) });
       setMessages((current) => [...current, message]);
       setMessageText('');
+      loadCommunity().catch(() => {});
     } catch (reason) { setError(reason.message); }
+  }
+
+  async function acceptMessageRequest() {
+    if (!activeConversation) return;
+    await run(() => api(`/api/community/conversations/${activeConversation._id}/accept`, { method: 'POST' }));
   }
 
   async function markNotificationsRead() {
     await api('/api/community/notifications/read', { method: 'POST' });
+    const readAt = new Date().toISOString();
+    setNotifications((current) => current.map((item) => item.readAt ? item : { ...item, readAt }));
     window.dispatchEvent(new Event('community:notifications-read'));
   }
+
+  const contacts = [...friends];
+  conversations.forEach((conversation) => {
+    if (conversation.user && !contacts.some((person) => String(person._id) === String(conversation.user._id))) contacts.push(conversation.user);
+  });
 
   return <section className="community-page">
     <div className="diary-heading community-heading"><div><p className="eyebrow">Không gian kết nối</p><h1>Những người bạn mới.</h1><p className="intro-description">Chia sẻ câu chuyện công khai và trò chuyện với những người bạn đã kết nối.</p></div></div>
@@ -375,7 +456,10 @@ function CommunityPage() {
         <section className="community-card">
           <p className="eyebrow">Thông báo <span className="count-pill">{notifications.filter((item) => !item.readAt).length}</span></p>
           {!!notifications.some((item) => !item.readAt) && <button className="text-button" onClick={() => run(markNotificationsRead)}>Đánh dấu đã đọc</button>}
-          {notifications.slice(0, 5).map((item) => <p className={`notification-line ${item.readAt ? '' : 'unread'}`} key={item._id}>{item.type === 'message' ? 'Tin nhắn mới từ' : item.type === 'friend_request' ? 'Lời mời kết bạn từ' : 'Đã trở thành bạn với'} <strong>{item.actor?.displayName || item.actor?.username}</strong></p>)}
+          {notifications.slice(0, 5).map((item) => <p className={`notification-line ${item.readAt ? '' : 'unread'}`} key={item._id}>
+            {item.type === 'message' ? 'Tin nhắn mới từ' : item.type === 'friend_request' ? 'Lời mời kết bạn từ' : item.type === 'friend_accepted' ? 'Đã trở thành bạn với' : item.type === 'entry_comment' ? 'đã bình luận bài viết:' : item.type === 'comment_reply' ? 'đã trả lời bình luận trong bài viết:' : item.type === 'comment_reaction' ? 'đã thả cảm xúc vào bình luận trong bài viết:' : item.type === 'entry_tag' ? 'đã gắn thẻ bạn trong bài viết:' : 'Thông báo từ'} <strong>{item.actor?.displayName || item.actor?.username}</strong>
+            {(item.type === 'entry_comment' || item.type === 'comment_reply' || item.type === 'comment_reaction' || item.type === 'entry_tag') && item.entry && <> · <Link to={item.entry.visibility === 'public' ? `/explore/${item.entry._id}` : `/entries/${item.entry._id}`}>{item.entry.title}</Link></>}
+          </p>)}
           {!notifications.length && <p className="community-hint">Thông báo mới sẽ xuất hiện ở đây.</p>}
         </section>
 
@@ -390,18 +474,18 @@ function CommunityPage() {
         <div className="community-card-heading"><div><p className="eyebrow">Bạn bè <span className="count-pill">{friends.length}</span></p><h2>Hộp thư</h2></div></div>
         <div className="messenger-layout">
           <div className="conversation-list">
-            {friends.map((friend) => {
+            {contacts.map((friend) => {
               const conversation = conversations.find((item) => String(item.user?._id) === String(friend._id));
-              return <button className={`conversation-item ${activeConversation?.user?._id === friend._id ? 'active' : ''}`} key={friend._id} onClick={() => openConversation(friend)}><UserAvatar src={String(user.id) === String(friend._id) ? user.avatarUrl : friend.avatarPath} name={friend.displayName || friend.username} className="comment-avatar" /><span><strong>{friend.displayName || friend.username}</strong><small>{conversation?.lastMessage?.content || `@${friend.username}`}</small></span></button>;
+              return <div className={`conversation-item ${activeConversation?.user?._id === friend._id ? 'active' : ''}`} key={friend._id}><button className="conversation-avatar-button" onClick={() => openConversation(friend)} aria-label={`Mở cuộc trò chuyện với ${friend.displayName || friend.username}`}><UserAvatar src={String(user.id) === String(friend._id) ? user.avatarUrl : friend.avatarPath} name={friend.displayName || friend.username} className="comment-avatar" /></button><span className="conversation-person-label"><Link className="conversation-person-name" to={`/people/${friend._id}`}>{friend.displayName || friend.username}</Link><button className="conversation-preview" onClick={() => openConversation(friend)}>{conversation?.lastMessage?.content || `@${friend.username}`}</button></span>{conversation?.unreadCount > 0 && <span className="message-unread-badge" aria-label={`${conversation.unreadCount} tin nhắn chưa đọc`}>{conversation.unreadCount > 9 ? '9+' : conversation.unreadCount}</span>}</div>;
             })}
-            {!friends.length && <p className="community-hint">Khi lời mời được chấp nhận, bạn bè sẽ xuất hiện ở đây.</p>}
+            {!contacts.length && <p className="community-hint">Khi có lời mời nhắn tin hoặc kết bạn, người đó sẽ xuất hiện ở đây.</p>}
           </div>
           <div className="chat-panel">
             {activeConversation ? <>
-              <div className="chat-heading"><div><p className="eyebrow">Đang trò chuyện</p><strong>{activeConversation.user.displayName || activeConversation.user.username}</strong></div><button className="text-button danger-text" onClick={blockActiveUser}>Chặn</button></div>
+              <div className="chat-heading"><div><p className="eyebrow">{activeConversation.status === 'pending' ? 'Lời mời nhắn tin' : 'Đang trò chuyện'}</p><strong>{activeConversation.user.displayName || activeConversation.user.username}</strong></div><div className="chat-heading-actions">{activeConversation.status === 'pending' && String(activeConversation.requestedBy) !== String(user.id) && messages.length > 0 && <button className="button button-small" onClick={acceptMessageRequest}>Chấp nhận lời nhắn</button>}<button className="text-button danger-text" onClick={blockActiveUser}>Chặn</button></div></div>
               <div className="chat-messages">{messages.map((message) => <div className={`chat-bubble ${String(message.sender?._id || message.sender) === String(user.id) ? 'mine' : ''}`} key={message._id}><p>{message.content}</p><time>{formatTimestamp(message.createdAt)}</time></div>)}{!messages.length && <p className="community-hint">Gửi lời chào đầu tiên nhé.</p>}</div>
-              <form className="chat-compose" onSubmit={sendMessage}><textarea value={messageText} onChange={(event) => setMessageText(event.target.value)} maxLength={5000} rows={2} placeholder="Viết tin nhắn…" required /><button className="button button-small" disabled={!messageText.trim()}>Gửi</button></form>
-            </> : <div className="chat-empty"><span aria-hidden="true">✉</span><h3>Chọn một người bạn</h3><p>Tin nhắn chỉ hiển thị với hai người trong cuộc trò chuyện.</p></div>}
+              {activeConversation.status === 'pending' && messages.length > 0 ? <p className="message-request-hint">{String(activeConversation.requestedBy) === String(user.id) ? 'Đang chờ người nhận chấp nhận lời nhắn trước khi bạn có thể nhắn tiếp.' : 'Hãy chấp nhận lời nhắn để bắt đầu trò chuyện.'}</p> : <form className="chat-compose" onSubmit={sendMessage}><textarea value={messageText} onChange={(event) => setMessageText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} maxLength={5000} rows={2} placeholder="Viết tin nhắn…" required /><button className="button button-small" disabled={!messageText.trim()}>Gửi</button></form>}
+            </> : <div className="chat-empty"><span aria-hidden="true">✉</span><h3>Chọn một người để nhắn tin</h3><p>Bạn có thể gửi lời nhắn đầu tiên cho người chưa kết bạn. Họ cần chấp nhận trước khi hai bên trò chuyện tiếp.</p></div>}
           </div>
         </div>
       </section>
@@ -422,6 +506,7 @@ function EntryRow({ entry, publicPage, displayName }) {
     <div className="entry-date"><span>{formatDay(entry.journalDate)}</span><small>{formatMonthYear(entry.journalDate)}</small></div>
     <div className="entry-row-body">
       <div className="entry-row-title"><h3><Link to={publicPage ? `/explore/${entry._id}` : `/entries/${entry._id}`}>{entry.title}</Link></h3>{publicPage && <span className="entry-row-mood"><UserAvatar src={authorAvatar} name={authorName} className="entry-author-avatar" /><strong>{entry.author?._id ? <Link to={`/people/${entry.author._id}`}>{authorName}</Link> : authorName}</strong>{entry.mood && <> đang cảm thấy <span aria-hidden="true">{MOOD_EMOJI[entry.mood] || '💭'}</span><strong>{capitalize(entry.mood)}</strong></>}</span>}{!publicPage && entry.mood && <span className="entry-row-mood"><span aria-hidden="true">{MOOD_EMOJI[entry.mood] || '💭'}</span><strong>{authorName}</strong> đang cảm thấy <strong>{capitalize(entry.mood)}</strong></span>}<span className={`visibility-mark ${entry.visibility}`} title={entry.visibility === 'public' ? 'Công khai' : 'Riêng tư'}>{entry.visibility === 'public' ? '◉' : '◌'}</span></div>
+      {!publicPage && entry.author?._id && String(entry.author._id) !== String(user?.id) && <p className="entry-shared-by">Được chia sẻ bởi <Link to={`/people/${entry.author._id}`}>{authorName}</Link></p>}
       <p className="entry-excerpt">{entry.content}</p>
       <div className="entry-meta">
         {(entry.tags || []).map((tag) => <span className="tag" key={tag}>#{tag}</span>)}
@@ -547,6 +632,7 @@ function EntryDetailPage({ publicPage = false }) {
     <div className="entry-paper">
       <div className="entry-prose">{entry.content.split('\n').map((line, index) => <p key={index}>{line || '\u00a0'}</p>)}</div>
       {!!entry.tags?.length && <div className="detail-tags">{entry.tags.map((tag) => <span className="tag" key={tag}>#{tag}</span>)}</div>}
+      {!!entry.taggedUsers?.length && <div className="detail-tags"><span className="tagged-with-label">Cùng với</span>{entry.taggedUsers.map((person) => <Link className="tagged-person-link" key={person._id || person} to={`/people/${person._id || person}`}>{person.displayName || person.username || 'Bạn bè'}</Link>)}</div>}
     </div>
 
     <section className="comments-section" id="comments">
@@ -586,10 +672,11 @@ function EntryFormPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const editing = Boolean(id);
-  const contentRef = useRef(null);
   const draftTimer = useRef(null);
   const draftSaveQueue = useRef(Promise.resolve());
-  const [form, setForm] = useState({ title: '', content: '', journalDate: localToday(), mood: '', tagsText: '', visibility: 'private' });
+  const [form, setForm] = useState({ title: '', content: '', journalDate: localToday(), mood: '', tagsText: '', taggedUserIds: [], visibility: 'private' });
+  const [friends, setFriends] = useState([]);
+  const [taggedUserOptions, setTaggedUserOptions] = useState([]);
   const [status, setStatus] = useState('loading');
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [draftStatus, setDraftStatus] = useState('');
@@ -598,15 +685,20 @@ function EntryFormPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    api('/api/community/friends').then(({ friends: items }) => setFriends(items)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     if (editing) {
       api(`/api/entries/${id}`).then(({ entry }) => {
-        setForm({ title: entry.title, content: entry.content, journalDate: entry.journalDate, mood: entry.mood || '', tagsText: (entry.tags || []).join(', '), visibility: entry.visibility });
+        setForm({ title: entry.title, content: entry.content, journalDate: entry.journalDate, mood: entry.mood || '', tagsText: (entry.tags || []).map((tag) => `#${tag}`).join(', '), taggedUserIds: (entry.taggedUsers || []).map((person) => String(person._id || person)), visibility: entry.visibility });
+        setTaggedUserOptions(entry.taggedUsers || []);
         setStatus('ready');
       }).catch((error) => { setSubmitError(error.message); setStatus('error'); });
       return;
     }
     api('/api/community/draft').then(({ draft }) => {
-      if (draft) setForm({ title: draft.title || '', content: draft.content || '', journalDate: draft.journalDate || localToday(), mood: draft.mood || '', tagsText: (draft.tags || []).join(', '), visibility: draft.visibility || 'private' });
+      if (draft) setForm({ title: draft.title || '', content: draft.content || '', journalDate: draft.journalDate || localToday(), mood: draft.mood || '', tagsText: (draft.tags || []).map((tag) => `#${tag}`).join(', '), taggedUserIds: (draft.taggedUsers || []).map((person) => String(person._id || person)), visibility: draft.visibility || 'private' });
       setDraftLoaded(true);
       setStatus('ready');
     }).catch(() => { setDraftLoaded(true); setStatus('ready'); setDraftStatus('Chưa thể tải bản nháp'); });
@@ -616,7 +708,7 @@ function EntryFormPage() {
     if (editing || !draftLoaded) return;
     draftTimer.current = setTimeout(() => {
       setDraftStatus('Đang lưu nháp…');
-      const payload = { title: form.title, content: form.content, journalDate: form.journalDate, mood: form.mood || null, tags: form.tagsText.split(',').map((tag) => tag.trim()).filter(Boolean), visibility: form.visibility };
+      const payload = { title: form.title, content: form.content, journalDate: form.journalDate, mood: form.mood || null, tags: parseTagInput(form.tagsText), taggedUsers: form.taggedUserIds, visibility: form.visibility };
       draftSaveQueue.current = draftSaveQueue.current.catch(() => {}).then(() => api('/api/community/draft', { method: 'PUT', body: jsonBody(payload) }))
         .then(() => setDraftStatus('Đã lưu nháp'))
         .catch(() => setDraftStatus('Chưa thể lưu nháp'));
@@ -629,13 +721,9 @@ function EntryFormPage() {
     setErrors((current) => ({ ...current, [field]: undefined }));
   }
 
-  function insertEmoji(emoji) {
-    const textarea = contentRef.current;
-    const start = textarea?.selectionStart ?? form.content.length;
-    const end = textarea?.selectionEnd ?? form.content.length;
-    const content = `${form.content.slice(0, start)}${emoji}${form.content.slice(end)}`;
-    update('content', content);
-    requestAnimationFrame(() => { textarea?.focus(); textarea?.setSelectionRange(start + emoji.length, start + emoji.length); });
+  function toggleTaggedFriend(friendId) {
+    const current = form.taggedUserIds || [];
+    update('taggedUserIds', current.includes(String(friendId)) ? current.filter((id) => id !== String(friendId)) : [...current, String(friendId)]);
   }
 
   async function submit(event) {
@@ -650,7 +738,8 @@ function EntryFormPage() {
       content: form.content,
       journalDate: form.journalDate,
       mood: form.mood || null,
-      tags: form.tagsText.split(',').map((tag) => tag.trim()).filter(Boolean),
+      tags: parseTagInput(form.tagsText),
+      taggedUsers: form.taggedUserIds,
       visibility: form.visibility
     };
     try {
@@ -664,6 +753,12 @@ function EntryFormPage() {
       setSaving(false);
     }
   }
+
+  const taggableFriends = [...friends];
+  taggedUserOptions.forEach((person) => {
+    const personId = String(person._id || person);
+    if (!taggableFriends.some((friend) => String(friend._id) === personId)) taggableFriends.push(typeof person === 'object' ? person : { _id: personId, displayName: 'Bạn đã gắn thẻ' });
+  });
 
   if (status === 'loading') return <Loading />;
   if (status === 'error') return <InlineError message={submitError} />;
@@ -681,13 +776,18 @@ function EntryFormPage() {
       </fieldset>
       <Field id="journal-date" label="Ngày nhật ký" error={errors.journalDate}><input id="journal-date" className="entry-date-input" type="date" value={form.journalDate} max={localToday()} onChange={(event) => update('journalDate', event.target.value)} required aria-invalid={Boolean(errors.journalDate)} /></Field>
       <Field id="entry-title" label="Tiêu đề" error={errors.title}><input id="entry-title" value={form.title} onChange={(event) => update('title', event.target.value)} maxLength={120} placeholder="Một điều bạn muốn nhớ" required /></Field>
-      <Field id="entry-content" label="Nội dung" error={errors.content}><div className="emoji-toolbar" aria-label="Chèn biểu tượng cảm xúc">{['😊', '❤️', '🌿', '✨', '☀️', '🌧️', '🙏', '☕'].map((emoji) => <button type="button" key={emoji} onClick={() => insertEmoji(emoji)} aria-label={`Chèn ${emoji}`}>{emoji}</button>)}</div><textarea ref={contentRef} id="entry-content" className="entry-content-input" value={form.content} onChange={(event) => update('content', event.target.value)} maxLength={10000} placeholder="Viết theo cách của bạn…" rows={12} required /></Field>
+      <Field id="entry-content" label="Nội dung" error={errors.content}><textarea id="entry-content" className="entry-content-input" value={form.content} onChange={(event) => update('content', event.target.value)} maxLength={10000} placeholder="Viết theo cách của bạn…" rows={12} required /></Field>
       <div className="entry-tools" role="group" aria-label="Tâm trạng và thẻ">
         <span className="entry-tools-title">Thêm vào trang viết</span>
         <div className="entry-tools-controls">
           <Field id="entry-mood" label={<><span aria-hidden="true">☻</span> Tâm trạng</>} error={errors.mood}><select id="entry-mood" value={form.mood} onChange={(event) => update('mood', event.target.value)}><option value="">Chọn tâm trạng</option>{MOODS.map((mood) => <option key={mood} value={mood}>{MOOD_EMOJI[mood]} {capitalize(mood)}</option>)}</select></Field>
-          <Field id="entry-tags" label={<><span aria-hidden="true">#</span> Gắn thẻ</>} hint="Ngăn cách bằng dấu phẩy" error={errors.tags}><input id="entry-tags" value={form.tagsText} onChange={(event) => update('tagsText', event.target.value)} placeholder="gia đình, một chuyến đi" /></Field>
+          <Field id="entry-tags" label={<><span aria-hidden="true">#</span> Hashtag</>} hint="Ngăn cách bằng dấu phẩy" error={errors.tags}><input id="entry-tags" value={form.tagsText} onChange={(event) => update('tagsText', event.target.value)} placeholder="#gia đình, #một chuyến đi" /></Field>
         </div>
+        <fieldset className="tagged-friends-fieldset" aria-describedby={errors.taggedUsers ? 'entry-tagged-users-error' : undefined}>
+          <legend>Gắn thẻ bạn bè</legend>
+          {taggableFriends.length ? <div className="tagged-friends-list">{taggableFriends.map((friend) => <label className="tagged-friend-option" key={friend._id}><input type="checkbox" checked={form.taggedUserIds.includes(String(friend._id))} onChange={() => toggleTaggedFriend(friend._id)} disabled={!form.taggedUserIds.includes(String(friend._id)) && form.taggedUserIds.length >= 20} /><UserAvatar src={friend.avatarPath} name={friend.displayName || friend.username} /><span>{friend.displayName || friend.username}</span></label>)}</div> : <span className="community-hint">Kết bạn để có thể gắn thẻ bạn bè.</span>}
+          {errors.taggedUsers && <small id="entry-tagged-users-error" className="field-error">{errors.taggedUsers}</small>}
+        </fieldset>
       </div>
       <div className="form-actions"><Link className="text-link" to={editing ? `/entries/${id}` : '/my-diary'}>Hủy</Link><button className="button" type="submit" disabled={saving}>{saving ? 'Đang lưu…' : editing ? 'Lưu thay đổi' : 'Lưu trang viết'}</button></div>
     </form>
@@ -826,6 +926,7 @@ function MyProfilePage() {
 function PublicProfilePage() {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
   const [entries, setEntries] = useState([]);
   const [relationship, setRelationship] = useState(null);
@@ -856,6 +957,19 @@ function PublicProfilePage() {
     return () => { active = false; };
   }, [id, user?.id, user?.needsProfileSetup]);
 
+  useEffect(() => {
+    if (!user || relationship?.state !== 'outgoing') return;
+    const events = new EventSource('/api/community/events');
+    const refreshRelationship = (event) => {
+      if (JSON.parse(event.data).type !== 'friend_accepted') return;
+      api(`/api/community/people/${id}/relationship`)
+        .then((data) => setRelationship(data.relationship))
+        .catch(() => {});
+    };
+    events.addEventListener('notification:new', refreshRelationship);
+    return () => events.close();
+  }, [id, user?.id, relationship?.state]);
+
   async function sendFriendRequest() {
     setRelationshipBusy(true);
     setRelationshipError('');
@@ -883,6 +997,10 @@ function PublicProfilePage() {
     }
   }
 
+  function openFriendChat() {
+    navigate('/community', { state: { openChatUser: { _id: profile.id, displayName: profile.displayName, username: profile.username, avatarPath: profile.avatarUrl } } });
+  }
+
   if (status === 'loading') return <Loading />;
   if (status === 'error') return <section className="profile-page"><InlineError message={error} /><Link className="text-link" to="/explore">Quay lại Góc chia sẻ</Link></section>;
 
@@ -891,10 +1009,10 @@ function PublicProfilePage() {
     <header className="public-profile-header">
       <UserAvatar src={String(user?.id) === String(profile.id) ? user?.avatarUrl : profile.avatarUrl} name={profile.displayName} className="profile-avatar-large" />
       <div className="public-profile-identity"><p className="eyebrow">Người viết</p><h1>{profile.displayName}</h1><p className="profile-username">@{profile.username}</p>{profile.bio && <p>{profile.bio}</p>}
-        {relationship?.state === 'none' && <button className="button button-small" type="button" onClick={sendFriendRequest} disabled={relationshipBusy}>{relationshipBusy ? 'Đang gửi…' : '＋ Thêm bạn'}</button>}
-        {relationship?.state === 'incoming' && <button className="button button-small" type="button" onClick={acceptFriendRequest} disabled={relationshipBusy}>{relationshipBusy ? 'Đang chấp nhận…' : 'Chấp nhận lời mời'}</button>}
-        {relationship?.state === 'outgoing' && <span className="relationship-status">Đã gửi lời mời kết bạn</span>}
-        {relationship?.state === 'friends' && <span className="relationship-status">Đã là bạn bè</span>}
+        {relationship?.state === 'none' && <div className="profile-contact-actions"><button className="button button-small" type="button" onClick={sendFriendRequest} disabled={relationshipBusy}>{relationshipBusy ? 'Đang gửi…' : '＋ Thêm bạn'}</button><button className="button button-outline button-small" type="button" onClick={openFriendChat}>✉ Nhắn tin</button></div>}
+        {relationship?.state === 'incoming' && <div className="profile-contact-actions"><button className="button button-small" type="button" onClick={acceptFriendRequest} disabled={relationshipBusy}>{relationshipBusy ? 'Đang chấp nhận…' : 'Chấp nhận lời mời'}</button><button className="button button-outline button-small" type="button" onClick={openFriendChat}>✉ Nhắn tin</button></div>}
+        {relationship?.state === 'outgoing' && <div className="profile-contact-actions"><span className="relationship-status">Đã gửi lời mời kết bạn</span><button className="button button-outline button-small" type="button" onClick={openFriendChat}>✉ Nhắn tin</button></div>}
+        {relationship?.state === 'friends' && <div className="profile-contact-actions"><span className="relationship-status">Đã là bạn bè</span><button className="button button-small" type="button" onClick={openFriendChat}>✉ Nhắn tin</button></div>}
         {relationship?.state === 'unavailable' && <span className="relationship-status">Không thể kết bạn</span>}
         {!user && <Link className="button button-small" to="/login" state={{ from: `/people/${profile.id}` }}>Đăng nhập để kết bạn</Link>}
         {user?.needsProfileSetup && <Link className="button button-small" to="/setup-profile">Đặt biệt danh để kết bạn</Link>}
@@ -1085,6 +1203,21 @@ function LoginPage() {
 
 function Field({ id, label, hint, error, children }) {
   return <div className="field"><label htmlFor={id}>{label}</label>{children}{hint && <small className="field-hint">{hint}</small>}{error && <small className="field-error" role="alert">{error}</small>}</div>;
+}
+
+function parseTagInput(value) {
+  return String(value || '').split(',').map((tag) => tag.trim().replace(/^#+/, '')).filter(Boolean);
+}
+
+function getActiveHashtag(value) {
+  const match = String(value || '').match(/(?:^|\s)#([^\s,]*)$/u);
+  return match ? match[1] : null;
+}
+
+function replaceActiveHashtag(value, tag) {
+  const match = String(value || '').match(/(?:^|\s)#([^\s,]*)$/u);
+  if (!match) return `#${tag}`;
+  return `${value.slice(0, match.index)}${match[0].slice(0, match[0].lastIndexOf('#'))}#${tag}`;
 }
 
 function Loading() {

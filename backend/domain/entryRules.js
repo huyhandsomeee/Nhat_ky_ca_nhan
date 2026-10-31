@@ -24,7 +24,7 @@ function validateEntryInput(input, today = new Date().toISOString().slice(0, 10)
 }
 
 function normalizeEntryInput(input) {
-  return {
+  const normalized = {
     title: String(input?.title ?? '').trim(),
     content: String(input?.content ?? '').trim(),
     journalDate: String(input?.journalDate ?? ''),
@@ -32,11 +32,13 @@ function normalizeEntryInput(input) {
     tags: parseTags(input?.tags),
     visibility: String(input?.visibility || 'private')
   };
+  if (Object.prototype.hasOwnProperty.call(input || {}, 'taggedUsers')) normalized.taggedUsers = parseTaggedUsers(input.taggedUsers);
+  return normalized;
 }
 
 function canReadEntry(entry, userId) {
   if (!entry) return false;
-  return entry.visibility === 'public' || (Boolean(userId) && sameId(entry.author, userId));
+  return entry.visibility === 'public' || (Boolean(userId) && (sameId(entry.author, userId) || entry.taggedUsers?.some((taggedUser) => sameId(taggedUser, userId))));
 }
 
 function canDeleteComment(comment, entry, userId) {
@@ -46,8 +48,13 @@ function canDeleteComment(comment, entry, userId) {
 
 function parseTags(value) {
   const rawTags = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
-  const normalized = rawTags.map((tag) => String(tag).trim()).filter(Boolean);
+  const normalized = rawTags.map((tag) => String(tag).trim().replace(/^#+/, '')).filter(Boolean);
   return [...new Map(normalized.map((tag) => [tag.toLocaleLowerCase(), tag])).values()];
+}
+
+function parseTaggedUsers(value) {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.map((id) => String(id).trim()).filter(Boolean))];
 }
 
 function isCalendarDate(value) {

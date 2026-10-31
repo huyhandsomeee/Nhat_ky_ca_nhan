@@ -2,6 +2,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Entry = require('../models/Entry');
 const Comment = require('../models/Comment');
+const Notification = require('../models/Notification');
+const eventHub = require('../services/eventHub');
 const { requireAuth, requireProfile } = require('../middleware/auth');
 const { canInteractWithEntry, normalizeReaction } = require('../domain/communityRules');
 
@@ -51,11 +53,27 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+router.get('/tags/suggestions', async (req, res, next) => {
+  try {
+    const query = String(req.query.q || '').trim().replace(/^#+/, '').slice(0, 30);
+    const pipeline = [{ $match: { visibility: 'public' } }, { $unwind: '$tags' }];
+    if (query) pipeline.push({ $match: { tags: { $regex: escapeRegex(query), $options: 'i' } } });
+    pipeline.push(
+      { $group: { _id: '$tags', uses: { $sum: 1 } } },
+      { $sort: { uses: -1, _id: 1 } },
+      { $limit: 8 },
+      { $project: { _id: 0, tag: '$_id', uses: 1 } }
+    );
+    return res.json({ suggestions: await Entry.aggregate(pipeline) });
+  } catch (error) { return next(error); }
+});
+
 router.get('/:id', async (req, res, next) => {
   if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
   try {
     const entry = await Entry.findOne({ _id: req.params.id, visibility: 'public' })
-      .populate('author', 'displayName avatarPath');
+      .populate('author', 'displayName avatarPath')
+      .populate('taggedUsers', 'username displayName');
     if (!entry) return notFound(res);
     const comments = await Comment.find({ entry: entry._id })
       .populate('author', 'displayName avatarPath')
@@ -82,6 +100,14 @@ router.post('/:id/comments', requireAuth, requireProfile, async (req, res, next)
     if (parentCommentId && !await Comment.exists({ _id: parentCommentId, entry: entry._id })) return notFound(res);
     const comment = await Comment.create({ content, parentComment: parentCommentId, entry: entry._id, author: req.user._id });
     await comment.populate('author', 'displayName avatarPath');
+    const recipientId = parentCommentId
+      ? (await Comment.findById(parentCommentId).select('author')).author
+      : entry.author;
+    if (String(recipientId) !== String(req.user._id)) {
+      const type = parentCommentId ? 'comment_reply' : 'entry_comment';
+      const notification = await Notification.create({ recipient: recipientId, actor: req.user._id, type, reference: comment._id, entry: entry._id });
+      eventHub.publish(recipientId, 'notification:new', { type: notification.type, actor: { displayName: req.user.displayName || req.user.username } });
+    }
     return res.status(201).json({ comment });
   } catch (error) {
     return next(error);
@@ -97,9 +123,14 @@ router.post('/:id/comments/:commentId/reactions', requireAuth, requireProfile, a
     if (!entry || !canInteractWithEntry(entry)) return notFound(res);
     const comment = await Comment.findOne({ _id: req.params.commentId, entry: entry._id, deleted: false });
     if (!comment) return notFound(res);
+    const previousEmoji = comment.reactions.find((reaction) => String(reaction.user) === String(req.user._id))?.emoji;
     comment.reactions = comment.reactions.filter((reaction) => String(reaction.user) !== String(req.user._id));
     if (emoji) comment.reactions.push({ user: req.user._id, emoji });
     await comment.save();
+    if (emoji && previousEmoji !== emoji && String(comment.author) !== String(req.user._id)) {
+      const notification = await Notification.create({ recipient: comment.author, actor: req.user._id, type: 'comment_reaction', reference: comment._id, entry: entry._id });
+      eventHub.publish(comment.author, 'notification:new', { type: notification.type, actor: { displayName: req.user.displayName || req.user.username } });
+    }
     await comment.populate('author', 'displayName avatarPath');
     await comment.populate('reactions.user', 'displayName');
     return res.json({ comment });
@@ -108,8 +139,13 @@ router.post('/:id/comments/:commentId/reactions', requireAuth, requireProfile, a
 
 function searchConditions(search) {
   const pattern = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return [{ title: { $regex: pattern, $options: 'i' } }, { content: { $regex: pattern, $options: 'i' } }];
+  const tagSearch = search.replace(/^#+/, '').trim();
+  const conditions = [{ title: { $regex: pattern, $options: 'i' } }, { content: { $regex: pattern, $options: 'i' } }];
+  if (tagSearch) conditions.push({ tags: { $regex: tagSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } });
+  return conditions;
 }
+
+function escapeRegex(value) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 function notFound(res) {
   return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Không tìm thấy bài viết.' } });
