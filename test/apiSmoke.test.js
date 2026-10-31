@@ -23,15 +23,26 @@ test('API reports session state and protects personal journal routes', async (t)
   assert.equal(protectedRequest.status, 401);
   assert.equal((await protectedRequest.json()).error.code, 'AUTH_REQUIRED');
 
-  for (const path of ['/api/community/users?q=mai', '/api/community/draft', '/api/community/events']) {
+  for (const path of ['/api/drafts']) {
     const response = await fetch(`${baseUrl}${path}`);
     assert.equal(response.status, 401, `${path} requires authentication`);
     assert.equal((await response.json()).error.code, 'AUTH_REQUIRED');
   }
 
-  const relationship = await fetch(`${baseUrl}/api/community/people/507f1f77bcf86cd799439011/relationship`);
-  assert.equal(relationship.status, 401, 'relationship details require authentication');
-  assert.equal((await relationship.json()).error.code, 'AUTH_REQUIRED');
+  for (const path of ['/api/entries/stats', '/api/social/saved', '/api/social/authors/507f1f77bcf86cd799439011']) {
+    const response = await fetch(`${baseUrl}${path}`);
+    assert.equal(response.status, 401, `${path} requires authentication`);
+    assert.equal((await response.json()).error.code, 'AUTH_REQUIRED');
+  }
+  const likeRequest = await fetch(`${baseUrl}/api/public/entries/507f1f77bcf86cd799439011/like`, { method: 'POST' });
+  assert.equal(likeRequest.status, 401, 'liking a public entry requires authentication');
+  const removedPostReaction = await fetch(`${baseUrl}/api/public/entries/507f1f77bcf86cd799439011/reactions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ emoji: '❤️' }) });
+  assert.equal(removedPostReaction.status, 404, 'post emoji reactions have been removed');
+
+  for (const path of ['/api/community/users?q=mai', '/api/community/conversations']) {
+    const removedFeature = await fetch(`${baseUrl}${path}`);
+    assert.equal(removedFeature.status, 404, `${path} is no longer available`);
+  }
 
   const avatarUpload = await fetch(`${baseUrl}/api/auth/profile/avatar`, {
     method: 'PUT',

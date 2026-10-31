@@ -32,7 +32,6 @@ function normalizeEntryInput(input) {
     tags: parseTags(input?.tags),
     visibility: String(input?.visibility || 'private')
   };
-  if (Object.prototype.hasOwnProperty.call(input || {}, 'taggedUsers')) normalized.taggedUsers = parseTaggedUsers(input.taggedUsers);
   return normalized;
 }
 
@@ -40,7 +39,7 @@ function canReadEntry(entry, userId) {
   if (!entry) return false;
   if (entry.visibility === 'public') return true;
   if (!userId) return false;
-  return sameId(entry.author, userId) || Boolean(entry.taggedUsers?.some((taggedUser) => sameId(taggedUser, userId)));
+  return sameId(entry.author, userId);
 }
 
 function canDeleteComment(comment, entry, userId) {
@@ -52,11 +51,6 @@ function parseTags(value) {
   const rawTags = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
   const normalized = rawTags.map((tag) => String(tag).trim().replace(/^#+/, '')).filter(Boolean);
   return [...new Map(normalized.map((tag) => [tag.toLocaleLowerCase(), tag])).values()];
-}
-
-function parseTaggedUsers(value) {
-  if (!Array.isArray(value)) return [];
-  return [...new Set(value.map((id) => String(id).trim()).filter(Boolean))];
 }
 
 function isCalendarDate(value) {

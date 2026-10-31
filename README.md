@@ -1,6 +1,6 @@
 # Nhật ký cá nhân
 
-Website viết và chia sẻ nhật ký, dùng React, Rolldown, Express và MongoDB. Mã nguồn được chia thành `frontend/` cho giao diện và `backend/` cho API, xác thực, mô hình dữ liệu và nghiệp vụ. Người dùng có thể đăng ký tài khoản bằng tên đăng nhập & mật khẩu, chọn biệt danh riêng, rồi quyết định bài nào chỉ mình xem và bài nào được chia sẻ.
+Website quản lý nhật ký cá nhân, dùng React, Rolldown, Express và MongoDB. Người dùng có thể đăng ký tài khoản, viết và quản lý bài nhật ký riêng tư, hoặc chủ động công khai từng bài để người khác đọc và bình luận.
 
 ## Cấu trúc dự án
 
@@ -18,10 +18,12 @@ Website viết và chia sẻ nhật ký, dùng React, Rolldown, Express và Mong
 - Lưu tiêu đề, nội dung, ngày nhật ký, tâm trạng tùy chọn và các thẻ tự nhập.
 - Tìm bài trong nhật ký cá nhân hoặc trong các bài công khai.
 - Ai cũng đọc được bài công khai; người dùng đăng nhập có thể bình luận.
+- Góc chia sẻ có luồng bài từ người đang theo dõi, lọc theo tâm trạng/hashtag/tác giả và sắp xếp bài; có thể thích hoặc lưu bài công khai.
+- Sổ của tôi có lịch, bộ lọc, thống kê cảm xúc 7 ngày và chuỗi ngày viết (streak) tính theo ngày nhật ký tại múi giờ `Asia/Ho_Chi_Minh`.
+- Bài đã lưu chỉ người lưu xem được; hồ sơ công khai chỉ hiển thị số bài công khai.
 - Bài viết có emoji tâm trạng và thanh chèn emoji; bài đang tạo được lưu nháp tự động theo tài khoản.
-- Tìm người dùng theo tên đăng nhập, gửi/nhận lời mời kết bạn và trò chuyện riêng sau khi kết bạn.
 - Bình luận trên bài công khai hỗ trợ trả lời theo luồng và thả 👍 ❤️ 😂 😮 😢 🙏.
-- Có thông báo trong ứng dụng cho lời mời và tin nhắn; người dùng có thể chặn hoặc bỏ chặn tài khoản.
+- Chủ bài nhận thông báo khi có người thả tim hoặc bình luận; người viết bình luận nhận thông báo khi có người trả lời hoặc thả cảm xúc.
 - Người viết bình luận có thể xóa bình luận của mình; chủ bài có thể xóa mọi bình luận trên bài.
 - Chuyển bài sang riêng tư sẽ ẩn bài và bình luận với người khác. Xóa bài sẽ xóa các bình luận đi kèm.
 
@@ -90,21 +92,24 @@ Mở <http://localhost:3000>.
 | `POST` | `/api/auth/reset-password` | Đặt lại / Đăng ký lại mật khẩu |
 | `PUT` | `/api/auth/profile` | Đặt hoặc đổi biệt danh |
 | `POST` | `/api/auth/logout` | Đăng xuất |
-| `GET`, `POST` | `/api/entries` | Liệt kê/tạo bài của tôi |
+| `GET`, `POST` | `/api/entries` | Tìm kiếm, lọc/liệt kê hoặc tạo bài nhật ký của tôi |
+| `GET` | `/api/entries/calendar?month=YYYY-MM` | Đếm bài nhật ký theo ngày trong tháng |
+| `GET` | `/api/entries/stats` | Thống kê tháng, cảm xúc tuần và streak riêng của tôi |
 | `GET`, `PUT`, `DELETE` | `/api/entries/:id` | Đọc/sửa/xóa bài của tôi |
 | `DELETE` | `/api/entries/:entryId/comments/:commentId` | Xóa bình luận theo quyền |
 | `GET` | `/api/public/entries` | Tìm và liệt kê bài công khai |
+| `GET` | `/api/public/entries/writers`, `/api/public/entries/authors?q=...` | Tác giả nổi bật hoặc gợi ý lọc tác giả |
+| `POST`, `DELETE` | `/api/public/entries/:id/like` | Thích hoặc bỏ thích bài công khai |
 | `GET` | `/api/public/entries/:id` | Đọc bài công khai cùng bình luận |
 | `POST` | `/api/public/entries/:id/comments` | Bình luận trên bài công khai |
 | `POST` | `/api/public/entries/:id/comments/:commentId/reactions` | Thêm hoặc gỡ phản ứng trên bình luận công khai |
-| `GET`, `POST` | `/api/community/users`, `/api/community/requests` | Tìm người dùng, gửi lời mời kết bạn |
-| `GET`, `POST`, `DELETE` | `/api/community/requests/:id...` | Xem, chấp nhận hoặc từ chối lời mời |
-| `GET`, `DELETE` | `/api/community/friends` | Xem bạn bè hoặc kết thúc kết nối |
-| `POST`, `GET`, `DELETE` | `/api/community/blocks/:id`, `/api/community/blocks` | Chặn, xem danh sách hoặc bỏ chặn |
-| `GET`, `POST` | `/api/community/conversations...` | Mở hộp thư và tải/gửi tin nhắn giữa bạn bè |
-| `GET` | `/api/community/events` | Sự kiện SSE đã xác thực cho tin nhắn và thông báo mới |
-| `GET`, `PUT`, `DELETE` | `/api/community/draft` | Tải, lưu hoặc xóa bản nháp tài khoản |
-| `GET`, `POST` | `/api/community/notifications` | Xem thông báo và đánh dấu đã đọc |
+| `GET` | `/api/social/saved` | Liệt kê bài công khai đã lưu của tôi |
+| `POST`, `DELETE` | `/api/social/entries/:id/save` | Lưu hoặc bỏ lưu bài công khai |
+| `GET` | `/api/social/authors/:id` | Xem trạng thái theo dõi tác giả |
+| `POST`, `DELETE` | `/api/social/authors/:id/follow` | Theo dõi hoặc bỏ theo dõi tác giả |
+| `GET`, `PUT`, `DELETE` | `/api/drafts` | Tải, lưu hoặc xóa bản nháp nhật ký |
+| `GET` | `/api/notifications` | Xem thông báo bình luận và số lượng chưa đọc |
+| `POST` | `/api/notifications/:id/read`, `/api/notifications/read` | Đánh dấu một hoặc tất cả thông báo đã đọc |
 
 Các API trả lỗi dưới dạng JSON. API bài riêng tư chỉ trả dữ liệu cho chủ bài; người khác nhận `404` để không tiết lộ bài có tồn tại hay không.
 

@@ -4,13 +4,14 @@ import SiteHeader from './components/SiteHeader';
 import { Loading, NotFound } from './components/ui';
 import ExplorePage from './pages/ExplorePage';
 import MyDiaryPage from './pages/MyDiaryPage';
-import CommunityPage from './pages/CommunityPage';
 import EntryDetailPage from './pages/EntryDetailPage';
 import EntryFormPage from './pages/EntryFormPage';
 import ProfileSetupPage from './pages/ProfileSetupPage';
 import MyProfilePage from './pages/MyProfilePage';
 import PublicProfilePage from './pages/PublicProfilePage';
 import LoginPage from './pages/LoginPage';
+import SavedEntriesPage from './pages/SavedEntriesPage';
+import WritersPage from './pages/WritersPage';
 
 export default function App() {
   return <BrowserRouter><AuthProvider><AppRoutes /></AuthProvider></BrowserRouter>;
@@ -24,13 +25,14 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={loading ? <Loading /> : <Navigate to={user ? '/my-diary' : '/explore'} replace />} />
         <Route path="/explore" element={<ExplorePage />} />
+        <Route path="/writers" element={<WritersPage />} />
         <Route path="/explore/:id" element={<EntryDetailPage publicPage />} />
         <Route path="/people/:id" element={<PublicProfilePage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/setup-profile" element={<PrivateRoute><ProfileSetupPage /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><MyProfilePage /></PrivateRoute>} />
         <Route path="/my-diary" element={<PrivateRoute><MyDiaryPage /></PrivateRoute>} />
-        <Route path="/community" element={<PrivateRoute><CommunityPage /></PrivateRoute>} />
+        <Route path="/saved" element={<PrivateRoute><SavedEntriesPage /></PrivateRoute>} />
         <Route path="/entries/new" element={<PrivateRoute><EntryFormPage /></PrivateRoute>} />
         <Route path="/entries/:id/edit" element={<PrivateRoute><EntryFormPage /></PrivateRoute>} />
         <Route path="/entries/:id" element={<PrivateRoute><EntryDetailPage /></PrivateRoute>} />

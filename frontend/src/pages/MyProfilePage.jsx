@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, jsonBody } from '../api';
 import { useAuth } from '../auth/AuthContext';
@@ -6,6 +6,7 @@ import { UserAvatar } from '../components/ui';
 
 export default function MyProfilePage() {
   const { user, refresh } = useAuth();
+  const [stats, setStats] = useState(null);
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [saving, setSaving] = useState(false);
@@ -13,6 +14,8 @@ export default function MyProfilePage() {
   const [error, setError] = useState('');
   const [avatarError, setAvatarError] = useState('');
   const [message, setMessage] = useState('');
+
+  useEffect(() => { api('/api/entries/stats').then(setStats).catch(() => {}); }, []);
 
   async function saveProfile(event) {
     event.preventDefault();
@@ -65,9 +68,10 @@ export default function MyProfilePage() {
 
   return <section className="profile-page">
     <Link className="back-link" to="/my-diary">← Sổ của tôi</Link>
-    <div className="profile-page-heading">
+    <div className="profile-page-heading profile-hero-card">
       <UserAvatar src={user?.avatarUrl} name={displayName} className="profile-avatar-large" />
-      <div><p className="eyebrow">Hồ sơ cá nhân</p><h1>{displayName || 'Hồ sơ của bạn'}</h1><p className="profile-username">@{user?.username}</p><p>Những thông tin này sẽ hiện trên trang Profile công khai.</p></div>
+      <div><p className="eyebrow">Hồ sơ cá nhân</p><h1>{displayName || 'Hồ sơ của bạn'}</h1><p className="profile-username">@{user?.username}</p><p>Tên và ảnh của bạn sẽ hiện cạnh những bài nhật ký công khai.</p></div>
+      {stats && <div className="profile-private-stats"><span><strong>{stats.monthCount}</strong><small>trang tháng này</small></span><span><strong>🔥 {stats.currentStreak}</strong><small>ngày streak</small></span></div>}
     </div>
     {(error || message) && <div className={error ? 'inline-error' : 'inline-success'} role={error ? 'alert' : 'status'}>{error || message}</div>}
     <div className="profile-edit-layout">

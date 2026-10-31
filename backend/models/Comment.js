@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { REACTIONS } = require('../domain/communityRules');
+const { REACTIONS } = require('../domain/entryInteractionRules');
 
 const reactionSchema = new mongoose.Schema({
   user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },

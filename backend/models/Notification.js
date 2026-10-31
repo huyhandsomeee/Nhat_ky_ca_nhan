@@ -1,14 +1,14 @@
 const mongoose = require('mongoose');
 
-const schema = new mongoose.Schema({
+const notificationSchema = new mongoose.Schema({
   recipient: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   actor: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-  type: { type: String, enum: ['friend_request', 'friend_accepted', 'message', 'entry_comment', 'comment_reply', 'comment_reaction', 'entry_tag'], required: true },
-  reference: { type: mongoose.Schema.Types.ObjectId },
-  entry: { type: mongoose.Schema.Types.ObjectId, ref: 'Entry' },
+  type: { type: String, enum: ['entry_comment', 'entry_like', 'comment_reply', 'comment_reaction', 'new_follower'], required: true },
+  entry: { type: mongoose.Schema.Types.ObjectId, ref: 'Entry', default: null },
+  comment: { type: mongoose.Schema.Types.ObjectId, ref: 'Comment', default: null },
   readAt: { type: Date, default: null }
 }, { timestamps: true });
 
-schema.index({ recipient: 1, readAt: 1, createdAt: -1 });
+notificationSchema.index({ recipient: 1, readAt: 1, createdAt: -1 });
 
-module.exports = mongoose.model('Notification', schema);
+module.exports = mongoose.model('Notification', notificationSchema);

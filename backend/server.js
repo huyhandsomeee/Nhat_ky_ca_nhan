@@ -13,8 +13,10 @@ const { configurePassport } = require('./auth/passport');
 const authRoutes = require('./routes/apiAuth');
 const entryRoutes = require('./routes/entries');
 const publicEntryRoutes = require('./routes/publicEntries');
-const communityRoutes = require('./routes/community');
+const draftRoutes = require('./routes/drafts');
 const profileRoutes = require('./routes/profiles');
+const notificationRoutes = require('./routes/notifications');
+const socialRoutes = require('./routes/social');
 
 function createApp(options) {
   configurePassport();
@@ -67,7 +69,9 @@ function createApp(options) {
   app.use('/api/auth', authRoutes);
   app.use('/api/entries', entryRoutes);
   app.use('/api/public/entries', publicEntryRoutes);
-  app.use('/api/community', communityRoutes);
+  app.use('/api/drafts', draftRoutes);
+  app.use('/api/notifications', notificationRoutes);
+  app.use('/api/social', socialRoutes);
   app.use('/api', (_req, res) => res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Không tìm thấy API.' } }));
 
   if (fs.existsSync(frontendDist)) {

@@ -14,7 +14,6 @@ const entrySchema = new mongoose.Schema({
   },
   mood: { type: String, enum: [null, ...MOODS], default: null },
   tags: { type: [{ type: String, trim: true, maxlength: 30 }], default: [] },
-  taggedUsers: { type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], default: [] },
   visibility: { type: String, enum: ['private', 'public'], default: 'private' },
   author: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
 }, { timestamps: true });

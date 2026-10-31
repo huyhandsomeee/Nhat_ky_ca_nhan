@@ -2,31 +2,87 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Entry = require('../models/Entry');
 const Comment = require('../models/Comment');
-const Friendship = require('../models/Friendship');
-const Notification = require('../models/Notification');
-const eventHub = require('../services/eventHub');
+const EntryLike = require('../models/EntryLike');
+const SavedEntry = require('../models/SavedEntry');
+const { calculateStreaks, dateInVietnam } = require('../domain/diaryStats');
 const { requireAuth, requireProfile } = require('../middleware/auth');
-const { validateEntryInput, normalizeEntryInput, canDeleteComment } = require('../domain/entryRules');
+const { MOODS, validateEntryInput, normalizeEntryInput, canDeleteComment } = require('../domain/entryRules');
 
 const router = express.Router();
 router.use(requireAuth, requireProfile);
 
+router.get('/stats', async (req, res, next) => {
+  try {
+    const today = dateInVietnam();
+    const [dates, totalCount, monthCount, moods, weekEntries] = await Promise.all([
+      Entry.distinct('journalDate', { author: req.user._id }),
+      Entry.countDocuments({ author: req.user._id }),
+      Entry.countDocuments({ author: req.user._id, journalDate: { $regex: `^${today.slice(0, 7)}-` } }),
+      Entry.aggregate([{ $match: { author: req.user._id, journalDate: { $regex: `^${today.slice(0, 7)}-` }, mood: { $ne: null } } }, { $group: { _id: '$mood', count: { $sum: 1 } } }, { $sort: { count: -1, _id: 1 } }, { $limit: 1 }]),
+      Entry.find({ author: req.user._id, journalDate: { $gte: shiftDate(today, -6), $lte: today } }).select('journalDate mood createdAt').sort({ createdAt: -1 }).lean()
+    ]);
+    const streaks = calculateStreaks(dates, today);
+    const moodByDate = {};
+    for (const entry of weekEntries) if (entry.mood && !moodByDate[entry.journalDate]) moodByDate[entry.journalDate] = entry.mood;
+    const week = Array.from({ length: 7 }, (_, index) => { const date = shiftDate(today, index - 6); return { date, mood: moodByDate[date] || null }; });
+    return res.json({ today, totalCount, monthCount, popularMood: moods[0]?._id || null, week, ...streaks });
+  } catch (error) { return next(error); }
+});
+
 router.get('/', async (req, res, next) => {
   try {
     const search = String(req.query.q || '').trim().slice(0, 100);
-    const ownerOrTagged = [{ author: req.user._id }, { taggedUsers: req.user._id }];
-    const filter = search ? { $and: [{ $or: ownerOrTagged }, { $or: searchConditions(search) }] } : { $or: ownerOrTagged };
-    const entries = await Entry.find(filter).populate('author', 'username displayName avatarPath').populate('taggedUsers', 'username displayName').sort({ journalDate: -1, createdAt: -1 }).limit(50);
-    res.json({ entries, search });
+    const mood = String(req.query.mood || '').trim();
+    const visibility = String(req.query.visibility || '').trim();
+    const tag = String(req.query.tag || '').trim().replace(/^#+/, '').slice(0, 30);
+    const date = String(req.query.date || '').trim();
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit, 10) || 20));
+    const sortOrder = String(req.query.sort || 'newest').trim();
+    if (mood && !MOODS.includes(mood)) return validationResponse(res, [{ field: 'mood', message: 'Tâm trạng không hợp lệ.' }]);
+    if (visibility && !['private', 'public'].includes(visibility)) return validationResponse(res, [{ field: 'visibility', message: 'Chế độ hiển thị không hợp lệ.' }]);
+    if (date && !isCalendarDate(date)) return validationResponse(res, [{ field: 'date', message: 'Ngày nhật ký không hợp lệ.' }]);
+    if (!['newest', 'oldest'].includes(sortOrder)) return validationResponse(res, [{ field: 'sort', message: 'Thứ tự sắp xếp không hợp lệ.' }]);
+
+    const conditions = [{ author: req.user._id }];
+    if (search) conditions.push({ $or: searchConditions(search) });
+    if (mood) conditions.push({ mood });
+    if (visibility) conditions.push({ visibility });
+    if (tag) conditions.push({ tags: { $regex: `^${escapeRegex(tag)}$`, $options: 'i' } });
+    if (date) conditions.push({ journalDate: date });
+    const filter = conditions.length === 1 ? conditions[0] : { $and: conditions };
+    const sort = sortOrder === 'oldest' ? { journalDate: 1, createdAt: 1 } : { journalDate: -1, createdAt: -1 };
+    const entries = await Entry.find(filter).populate('author', 'username displayName avatarPath').sort(sort).skip((page - 1) * limit).limit(limit + 1);
+    const hasMore = entries.length > limit;
+    if (hasMore) entries.pop();
+    res.json({ entries, search, page, hasMore });
   } catch (error) {
     next(error);
+  }
+});
+
+router.get('/calendar', async (req, res, next) => {
+  const month = String(req.query.month || '').trim();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    return validationResponse(res, [{ field: 'month', message: 'Tháng cần có định dạng YYYY-MM.' }]);
+  }
+  try {
+    const days = await Entry.aggregate([
+      { $match: { author: req.user._id, journalDate: { $regex: `^${month}-` } } },
+      { $group: { _id: '$journalDate', count: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+      { $project: { _id: 0, date: '$_id', count: 1 } }
+    ]);
+    return res.json({ month, days });
+  } catch (error) {
+    return next(error);
   }
 });
 
 router.get('/tags/suggestions', async (req, res, next) => {
   try {
     const query = String(req.query.q || '').trim().replace(/^#+/, '').slice(0, 30);
-    const match = { $or: [{ author: req.user._id }, { taggedUsers: req.user._id }] };
+    const match = { author: req.user._id };
     const pipeline = [{ $match: match }, { $unwind: '$tags' }];
     if (query) pipeline.push({ $match: { tags: { $regex: escapeRegex(query), $options: 'i' } } });
     pipeline.push(
@@ -42,11 +98,8 @@ router.get('/tags/suggestions', async (req, res, next) => {
 router.post('/', async (req, res, next) => {
   try {
     const errors = validateEntryInput(req.body, vietnameseToday());
-    errors.push(...await validateTaggedUsers(req.body?.taggedUsers, req.user._id));
     if (errors.length) return validationResponse(res, errors);
     const entry = await Entry.create({ ...normalizeEntryInput(req.body), author: req.user._id });
-    await notifyTaggedUsers(entry, entry.taggedUsers, req.user);
-    await entry.populate('taggedUsers', 'username displayName avatarPath');
     return res.status(201).json({ entry });
   } catch (error) {
     return next(error);
@@ -56,8 +109,8 @@ router.post('/', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
   try {
-    const entry = await Entry.findOne({ _id: req.params.id, $or: [{ author: req.user._id }, { taggedUsers: req.user._id }] })
-      .populate('author', 'username displayName avatarPath').populate('taggedUsers', 'username displayName avatarPath');
+    const entry = await Entry.findOne({ _id: req.params.id, author: req.user._id })
+      .populate('author', 'username displayName avatarPath');
     if (!entry) return notFound(res);
     const comments = await Comment.find({ entry: entry._id }).populate('author', 'displayName').populate('reactions.user', 'displayName').sort({ createdAt: 1 });
     return res.json({ entry, comments });
@@ -72,13 +125,9 @@ router.put('/:id', async (req, res, next) => {
     const entry = await Entry.findOne({ _id: req.params.id, author: req.user._id });
     if (!entry) return notFound(res);
     const errors = validateEntryInput(req.body, vietnameseToday());
-    errors.push(...await validateTaggedUsers(req.body?.taggedUsers, req.user._id, entry.taggedUsers));
     if (errors.length) return validationResponse(res, errors);
-    const previouslyTagged = new Set(entry.taggedUsers.map(String));
     entry.set(normalizeEntryInput(req.body));
     await entry.save();
-    await notifyTaggedUsers(entry, entry.taggedUsers.filter((userId) => !previouslyTagged.has(String(userId))), req.user);
-    await entry.populate('taggedUsers', 'username displayName avatarPath');
     return res.json({ entry });
   } catch (error) {
     return next(error);
@@ -91,6 +140,7 @@ router.delete('/:id', async (req, res, next) => {
     const entry = await Entry.findOneAndDelete({ _id: req.params.id, author: req.user._id });
     if (!entry) return notFound(res);
     await Comment.deleteMany({ entry: entry._id });
+    await Promise.all([EntryLike.deleteMany({ entry: entry._id }), SavedEntry.deleteMany({ entry: entry._id })]);
     return res.status(204).end();
   } catch (error) {
     return next(error);
@@ -144,25 +194,10 @@ function searchConditions(search) {
 
 function escapeRegex(value) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
-async function validateTaggedUsers(value, authorId, previouslyTagged = []) {
-  if (value === undefined) return [];
-  if (!Array.isArray(value)) return [{ field: 'taggedUsers', message: 'Hãy chọn bạn bè từ danh sách.' }];
-  const ids = [...new Set(value.map((item) => String(item).trim()).filter(Boolean))];
-  if (ids.length > 20) return [{ field: 'taggedUsers', message: 'Mỗi bài viết có thể gắn thẻ tối đa 20 người bạn.' }];
-  if (ids.some((id) => !mongoose.isValidObjectId(id) || id === String(authorId))) return [{ field: 'taggedUsers', message: 'Danh sách bạn bè được gắn thẻ không hợp lệ.' }];
-  if (!ids.length) return [];
-  const friendships = await Friendship.find({ users: authorId }).select('users');
-  const friendIds = new Set(friendships.flatMap((friendship) => friendship.users.map(String)).filter((id) => id !== String(authorId)));
-  const existingIds = new Set(previouslyTagged.map(String));
-  return ids.every((id) => friendIds.has(id) || existingIds.has(id)) ? [] : [{ field: 'taggedUsers', message: 'Bạn chỉ có thể gắn thẻ bạn bè đã kết nối.' }];
-}
-
-async function notifyTaggedUsers(entry, userIds, actor) {
-  const recipients = [...new Set(userIds.map(String))].filter((id) => id !== String(actor._id));
-  await Promise.all(recipients.map(async (recipient) => {
-    const notification = await Notification.create({ recipient, actor: actor._id, type: 'entry_tag', reference: entry._id, entry: entry._id });
-    eventHub.publish(recipient, 'notification:new', { type: notification.type, actor: { displayName: actor.displayName || actor.username } });
-  }));
+function isCalendarDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
 }
 
 function notFound(res) {
@@ -173,6 +208,12 @@ function vietnameseToday(now = new Date()) {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit'
   }).format(now);
+}
+
+function shiftDate(value, offset) {
+  const date = new Date(`${value}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + offset);
+  return date.toISOString().slice(0, 10);
 }
 
 module.exports = router;

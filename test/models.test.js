@@ -4,6 +4,10 @@ const bcrypt = require('bcryptjs');
 const Entry = require('../backend/models/Entry');
 const User = require('../backend/models/User');
 const Comment = require('../backend/models/Comment');
+const EntryLike = require('../backend/models/EntryLike');
+const SavedEntry = require('../backend/models/SavedEntry');
+const Follow = require('../backend/models/Follow');
+const Notification = require('../backend/models/Notification');
 
 test('entry documents keep diary date, optional mood/tags, and private visibility by default', () => {
   const entry = new Entry({
@@ -70,4 +74,22 @@ test('comments belong to both an entry and an authenticated user', () => {
   });
 
   assert.equal(comment.validateSync(), undefined);
+});
+
+test('likes, saved entries, and follows have a unique user-pair index', () => {
+  for (const model of [EntryLike, SavedEntry]) {
+    assert.ok(model.schema.indexes().some(([keys, options]) => keys.entry === 1 && keys.user === 1 && options.unique));
+  }
+  assert.ok(Follow.schema.indexes().some(([keys, options]) => keys.follower === 1 && keys.author === 1 && options.unique));
+});
+
+test('entry like notifications do not require a comment reference', () => {
+  const notification = new Notification({
+    recipient: '507f1f77bcf86cd799439011',
+    actor: '507f191e810c19729de860ea',
+    type: 'entry_like',
+    entry: '507f1f77bcf86cd799439012'
+  });
+  assert.equal(notification.comment, null);
+  assert.equal(notification.validateSync(), undefined);
 });
