@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api, jsonBody } from '../api';
-import { useAuth } from '../auth/AuthContext';
 import { Field, InlineError, Loading, UserAvatar } from '../components/ui';
 import { MOODS, MOOD_EMOJI, capitalize, localToday, parseTagInput } from '../shared/entryUtils';
 

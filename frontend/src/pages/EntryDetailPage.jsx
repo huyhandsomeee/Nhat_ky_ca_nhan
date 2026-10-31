@@ -4,7 +4,7 @@ import { api, jsonBody } from '../api';
 import { canComment } from '../commentPermissions.mjs';
 import { useAuth } from '../auth/AuthContext';
 import { InlineError, Loading, UserAvatar } from '../components/ui';
-import { MOOD_EMOJI, REACTIONS, capitalize, formatLongDate, formatTimestamp, getCommentDepth } from '../shared/entryUtils';
+import { MOOD_EMOJI, REACTIONS, capitalize, formatDay, formatLongDate, formatTimestamp, getCommentDepth } from '../shared/entryUtils';
 
 export default function EntryDetailPage({ publicPage = false }) {
   const { id } = useParams();

@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { api, apiUrl, jsonBody } from '../api';
 import { useAuth } from '../auth/AuthContext';
 import { InlineError, UserAvatar } from '../components/ui';
+import { formatTimestamp } from '../shared/entryUtils';
 
 export default function CommunityPage() {
   const { user } = useAuth();
