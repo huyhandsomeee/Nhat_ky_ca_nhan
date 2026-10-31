@@ -21,7 +21,7 @@ function createApp(options) {
 
   const app = express();
   const frontendDist = path.join(__dirname, '..', 'dist');
-  const mongoDbName = process.env.MONGO_DB_NAME || 'nhat_ky_ca_nhan_v2';
+  const mongoDbName = process.env.MONGO_DB_NAME || 'nhat_ky_ca_nhan';
   const sessionStore = options?.sessionStore || MongoStore.create({ mongoUrl: process.env.MONGODB_URI, dbName: mongoDbName, collectionName: 'sessions' });
   const sessionSecret = process.env.SESSION_SECRET || (process.env.NODE_ENV === 'production' ? '' : 'local-development-secret-change-this');
   if (!sessionSecret) throw new Error('SESSION_SECRET is required in production.');

@@ -7,7 +7,7 @@ export function EntryList({ entries, publicPage = false, displayName }) {
   return <div className="entry-list">{entries.map((entry) => <EntryRow key={entry._id} entry={entry} publicPage={publicPage} displayName={displayName} />)}</div>;
 }
 
-export function EntryRow({ entry, publicPage, displayName }) {
+function EntryRow({ entry, publicPage, displayName }) {
   const { user } = useAuth();
   const authorName = entry.author?.displayName || displayName || 'Người viết';
   const authorId = entry.author?._id;

@@ -108,10 +108,7 @@ h1, h2, h3 { color: var(--ink); }
 .preview-comment-avatar { width: 23px; height: 23px; font-size: 10px; }
 .entry-comments-link { width: fit-content; margin-top: 1px; color: var(--moss); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
 .entry-comments-link:hover { color: var(--moss-deep); }
-.mood-chip, .tag { display: inline-flex; align-items: center; border-radius: 2px; padding: 4px 7px; background: #e2ece1; color: #4d6a52; font-size: 12px; }
-.mood-chip { gap: 4px; }
-.tag { background: transparent; color: #75847c; }
-.author-name { margin-left: auto; color: var(--muted); font-size: 12px; }
+.tag { display: inline-flex; align-items: center; border-radius: 2px; padding: 4px 7px; background: transparent; color: #75847c; font-size: 12px; }
 .row-open { padding-top: 5px; color: #829288; text-align: right; transition: color .15s ease; }
 .row-open:hover { color: var(--moss-deep); }
 .empty-state { display: grid; justify-items: center; gap: 9px; padding: 68px 20px; border-top: 1px solid var(--line); text-align: center; }
@@ -182,7 +179,6 @@ h1, h2, h3 { color: var(--ink); }
 .editor-heading h1 { font-size: clamp(30px, 4vw, 43px); }
 .editor-heading > p:last-child { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
 .entry-form { display: grid; gap: 20px; }
-.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .field { display: grid; align-content: start; gap: 8px; }
 .field > label { color: var(--ink); font-size: 12px; font-weight: 600; }
 .field input, .field textarea, .field select, .profile-form input { width: 100%; min-height: 43px; border: 1px solid #ccd8d0; border-radius: 3px; padding: 10px 12px; background: var(--surface); color: var(--ink); font-size: 13px; }
@@ -332,7 +328,6 @@ h1, h2, h3 { color: var(--ink); }
   .entry-date small { font-size: 12px; }
   .entry-row-title h3 { font-size: 15px; }
   .entry-excerpt { font-size: 13px; }
-  .author-name { width: 100%; margin-left: 0; }
   .diary-heading { align-items: start; flex-direction: column; padding: 42px 0 28px; }
   .diary-heading h1 { font-size: 37px; }
   .diary-heading .intro-description { margin-top: 9px; }
@@ -349,7 +344,6 @@ h1, h2, h3 { color: var(--ink); }
   .comment-login { align-items: start; flex-direction: column; gap: 8px; }
   .editor-page { padding-top: 25px; }
   .editor-heading h1 { font-size: 33px; }
-  .form-grid { grid-template-columns: 1fr; gap: 18px; }
   .visibility-option { padding: 12px; }
   .profile-page-heading, .public-profile-header { align-items: flex-start; gap: 14px; }
   .profile-avatar-large { width: 64px; height: 64px; font-size: 23px; }

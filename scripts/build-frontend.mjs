@@ -1,9 +1,9 @@
 import { cp, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { rolldown } from 'rolldown';
-import { frontendBundleOptions } from './frontend-bundler.mjs';
+import { frontendBundleOptions, projectRoot } from './frontend-bundler.mjs';
 
-const root = process.cwd();
+const root = projectRoot;
 const dist = path.join(root, 'dist');
 const assets = path.join(dist, 'assets');
 

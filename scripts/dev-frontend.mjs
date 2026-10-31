@@ -1,9 +1,9 @@
 import express from 'express';
 import path from 'node:path';
 import { watch } from 'rolldown';
-import { frontendBundleOptions } from './frontend-bundler.mjs';
+import { frontendBundleOptions, projectRoot } from './frontend-bundler.mjs';
 
-const root = process.cwd();
+const root = projectRoot;
 const frontend = path.join(root, 'frontend');
 const assets = path.join(frontend, '.dev-assets');
 const port = Number(process.env.FRONTEND_PORT || 5174);

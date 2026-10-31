@@ -38,7 +38,9 @@ function normalizeEntryInput(input) {
 
 function canReadEntry(entry, userId) {
   if (!entry) return false;
-  return entry.visibility === 'public' || (Boolean(userId) && (sameId(entry.author, userId) || entry.taggedUsers?.some((taggedUser) => sameId(taggedUser, userId))));
+  if (entry.visibility === 'public') return true;
+  if (!userId) return false;
+  return sameId(entry.author, userId) || Boolean(entry.taggedUsers?.some((taggedUser) => sameId(taggedUser, userId)));
 }
 
 function canDeleteComment(comment, entry, userId) {

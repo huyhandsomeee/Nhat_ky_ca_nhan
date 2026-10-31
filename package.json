@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Website nhật ký cá nhân với React, Express và MongoDB",
   "main": "backend/server.js",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "start": "node backend/server.js",
     "dev": "node scripts/dev-frontend.mjs",
@@ -19,7 +22,6 @@
     "helmet": "^8.0.0",
     "mongoose": "^8.9.5",
     "passport": "^0.7.0",
-    "passport-google-oauth20": "^2.0.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.4"
