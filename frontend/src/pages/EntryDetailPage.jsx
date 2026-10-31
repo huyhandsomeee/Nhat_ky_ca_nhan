@@ -194,8 +194,10 @@ export default function EntryDetailPage({ publicPage = false }) {
         <div className="detail-author-identity"><strong>{authorSummary.displayName}</strong><span>@{authorSummary.username}</span></div>
         {authorSummary.bio && <p className="detail-author-bio">{authorSummary.bio}</p>}
         <div className="detail-author-stats"><span><strong>{authorSummary.publicEntryCount || 0}</strong> bài công khai</span></div>
-        <FollowButton authorId={authorSummary.id} />
-        <Link className="text-link" to={`/people/${authorSummary.id}`}>Trang cá nhân</Link>
+        <div className="detail-author-actions">
+          <FollowButton authorId={authorSummary.id} />
+          <Link className="text-link" to={`/people/${authorSummary.id}`}>Trang cá nhân</Link>
+        </div>
       </section>}
       {relatedEntries.length > 0 && <section className="detail-sidebar-card detail-related-card"><div className="detail-sidebar-heading"><h2>Bài viết gần đây</h2><Link to={`/people/${authorId}`}>Xem hồ sơ</Link></div>{relatedEntries.map((item) => <Link className="detail-related-entry" key={item._id} to={`/explore/${item._id}`}><time>{formatLongDate(item.journalDate)}</time><strong>{item.title}</strong><span>{item.content}</span></Link>)}</section>}
       <section className="detail-prompt-card"><p className="eyebrow">✦ Gợi ý hôm nay</p><p>“{dailyPrompt}”</p>{user && <Link to="/entries/new">Viết nhật ký</Link>}</section>

@@ -48,7 +48,7 @@ function EntryRow({ entry, publicPage, displayName, onSaveChange }) {
           <UserAvatar src={authorAvatar} name={authorName} className="entry-author-avatar" />
           <strong className="public-entry-author">{authorId ? <Link to={`/people/${authorId}`}>{authorName}</Link> : authorName}</strong>
           {entry.author?.username && <span className="public-entry-username">@{entry.author.username}</span>}
-          {entry.mood && <span className="public-entry-mood"><span aria-hidden="true">{MOOD_EMOJI[entry.mood] || '💭'}</span> {capitalize(entry.mood)}</span>}
+          {entry.mood && <span className="public-entry-mood"><span className="public-entry-mood-label">đang cảm thấy</span><span aria-hidden="true">{MOOD_EMOJI[entry.mood] || '💭'}</span><span>{capitalize(entry.mood)}</span></span>}
           <span className="public-entry-time">· Đăng lúc {new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date(entry.createdAt))}</span>
         </div>
         <button type="button" className={saved ? 'entry-save-icon active' : 'entry-save-icon'} onClick={toggleSave} disabled={!user} aria-label={saved ? 'Bỏ lưu bài viết' : 'Lưu bài viết'} aria-pressed={saved} title={user ? (saved ? 'Bỏ lưu bài viết' : 'Lưu riêng tư') : 'Đăng nhập để lưu bài viết'}>
@@ -83,6 +83,7 @@ function EntryRow({ entry, publicPage, displayName, onSaveChange }) {
         </span>
         {entry.mood && (
           <span className="entry-row-mood">
+            <span>đang cảm thấy</span>
             <span aria-hidden="true">{MOOD_EMOJI[entry.mood] || '💭'}</span>
             <span>{capitalize(entry.mood)}</span>
           </span>
