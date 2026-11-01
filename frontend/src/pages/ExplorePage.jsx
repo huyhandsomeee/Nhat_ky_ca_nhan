@@ -8,7 +8,6 @@ import { EmptyState, InlineError, Loading, UserAvatar } from '../components/ui';
 import { MOODS, MOOD_EMOJI, capitalize } from '../shared/entryUtils';
 import { getAuthorSearchTerm, getSearchHashtagFragment, parseEntrySearch, replaceSearchAuthor, replaceSearchHashtag } from '../shared/searchFilters.mjs';
 import { getPageWindow, PAGE_SIZE } from '../shared/pagination.mjs';
-import { getDailyPrompt } from '../shared/dailyPrompt.mjs';
 
 export default function ExplorePage() {
   const { user } = useAuth();
@@ -32,7 +31,6 @@ export default function ExplorePage() {
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
 
-  const prompt = getDailyPrompt();
   const totalPages = Math.ceil(totalEntries / PAGE_SIZE);
   const hasFilters = Boolean(mood || tag || author || sort !== 'newest');
 
@@ -159,7 +157,6 @@ export default function ExplorePage() {
         {status === 'ready' && (entries.length ? <><EntryList entries={entries} publicPage /><nav className="explore-pagination" aria-label="Phân trang bài viết"><button type="button" className="pagination-step" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1} aria-label="Trang trước">‹</button>{getPageWindow(page, totalPages).map((pageNumber) => <button type="button" key={pageNumber} className={pageNumber === page ? 'active' : ''} aria-current={pageNumber === page ? 'page' : undefined} onClick={() => setPage(pageNumber)}>{pageNumber}</button>)}<button type="button" className="pagination-step" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={!hasMore} aria-label="Trang sau">›</button></nav></> : <EmptyState title={feed === 'following' ? 'Luồng theo dõi đang yên ắng.' : hasFilters ? 'Chưa tìm thấy trang viết phù hợp.' : 'Góc này đang yên ắng.'} body={feed === 'following' ? 'Theo dõi một tác giả để thấy bài viết công khai của họ tại đây.' : 'Thử thay đổi bộ lọc hoặc quay lại sau nhé.'} action={hasFilters ? <button className="button button-outline" type="button" onClick={clearFilters}>Xóa bộ lọc</button> : undefined} />)}
       </section>
       <aside className="explore-sidebar">
-        <section className="daily-prompt-card"><p className="eyebrow">✦ Gợi ý hôm nay</p><h3>“{prompt}”</h3><p>Một câu hỏi nhỏ để giúp bạn bắt đầu viết.</p>{user ? <Link to="/entries/new" state={{ prompt }}>✎ Viết chia sẻ về chủ đề này</Link> : <Link to="/login">Đăng nhập để viết</Link>}</section>
         <section className="writers-card"><div className="sidebar-heading"><div><p className="eyebrow">Cây bút đồng điệu</p><h3>Người viết nổi bật</h3></div>{totalWriters > 3 && <Link className="writers-view-all" to="/writers">Xem tất cả <span aria-hidden="true">›</span></Link>}</div>{writers.length ? <ul>{writers.slice(0, 3).map((writer) => <li key={writer._id}><Link to={`/people/${writer._id}`}><UserAvatar src={writer.avatarPath} name={writer.displayName} /><span><strong>{writer.displayName}</strong><small>{writer.publicEntryCount} bài viết công khai</small></span></Link><FollowButton authorId={writer._id} /></li>)}</ul> : <p className="muted">Những người viết sẽ xuất hiện tại đây.</p>}</section>
         <section className="privacy-note"><strong>Chia sẻ theo cách của bạn</strong><p>Chỉ những bài bạn đặt ở chế độ công khai mới xuất hiện trong Góc chia sẻ.</p><Link to="/my-diary">Mở Sổ của tôi →</Link></section>
       </aside>

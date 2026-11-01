@@ -5,7 +5,6 @@ import { useAuth } from '../auth/AuthContext';
 import { EntryList } from '../components/EntryList';
 import { EmptyState, InlineError, Loading } from '../components/ui';
 import { MOOD_EMOJI, capitalize, localToday } from '../shared/entryUtils';
-import { getAlternativeDailyPrompt, getDailyPrompt } from '../shared/dailyPrompt.mjs';
 
 const WEEKDAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
@@ -16,7 +15,6 @@ export default function MyDiaryPage() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [stats, setStats] = useState(null);
-  const [prompt, setPrompt] = useState(() => getDailyPrompt());
   const [visibilityFilter, setVisibilityFilter] = useState('');
   const [sort, setSort] = useState('newest');
   const [tagInput, setTagInput] = useState('');
@@ -157,7 +155,6 @@ export default function MyDiaryPage() {
           {weeklyMoodDistribution.length > 0 ? <div className="weekly-mood-distribution" aria-label="Phân bố tâm trạng tuần này">{weeklyMoodDistribution.map(([mood, count]) => <div className="weekly-mood-row" key={mood}><span className="weekly-mood-label">{MOOD_EMOJI[mood]} {capitalize(mood)}</span><div className="weekly-mood-bar" role="img" aria-label={`${capitalize(mood)}: ${count} trên 7 ngày`}><span style={{ width: `${count / 7 * 100}%` }} /></div><strong>{count}</strong></div>)}</div> : <p className="weekly-mood-empty">Chưa có tâm trạng nào được ghi trong 7 ngày qua.</p>}
         </section>}
 
-        <section className="diary-prompt-panel"><p className="eyebrow">✦ Gợi ý hôm nay</p><h3 aria-live="polite">“{prompt}”</h3><p>Gợi ý nhỏ để bạn bắt đầu viết.</p><div className="diary-prompt-actions"><button type="button" onClick={() => setPrompt((current) => getAlternativeDailyPrompt(current))}>Đổi gợi ý</button><Link to="/entries/new" state={{ prompt }}>✎ Viết từ gợi ý này</Link></div></section>
       </aside>
 
       <section className="diary-feed" aria-labelledby="diary-list-heading">

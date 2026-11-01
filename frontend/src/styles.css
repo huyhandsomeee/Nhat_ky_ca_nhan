@@ -75,11 +75,8 @@ button { color: inherit; }
 .explore-layout { display: grid; grid-template-columns: minmax(0, 1fr) 285px; align-items: start; gap: 22px; }
 .explore-feed-section { min-width: 0; margin-top: 0; }
 .explore-sidebar { display: grid; gap: 14px; }
-.daily-prompt-card, .writers-card, .privacy-note, .mood-week-card { border: 1px solid var(--line); border-radius: 13px; padding: 17px; background: var(--paper); box-shadow: 0 4px 13px rgb(31 55 44 / 4%); }
-.daily-prompt-card { border-color: #dfd7b5; background: #fbf8ec; }
-.daily-prompt-card h3 { margin: 6px 0; font-family: var(--font-sans); font-size: 21px; line-height: 1.45; }
-.daily-prompt-card p:not(.eyebrow), .privacy-note p { margin: 6px 0 12px; color: var(--muted); font-size: 14px; }
-.daily-prompt-card > a { display: block; border-radius: 8px; padding: 8px; background: var(--moss-deep); color: white; text-align: center; font-size: 14px; }
+.writers-card, .privacy-note, .mood-week-card { border: 1px solid var(--line); border-radius: 13px; padding: 17px; background: var(--paper); box-shadow: 0 4px 13px rgb(31 55 44 / 4%); }
+.privacy-note p { margin: 6px 0 12px; color: var(--muted); font-size: 14px; }
 .writers-card .sidebar-heading { display: flex; align-items: center; justify-content: space-between; }
 .writers-card h3 { margin: 0; font-family: var(--font-sans); font-size: 20px; }
 .sidebar-heading > a, .privacy-note > a { color: var(--moss-deep); font-size: 14px; }
@@ -571,7 +568,7 @@ h3 { font-size: var(--text-subtitle); line-height: 1.4; }
 .intro-copy h1, .diary-heading h1, .editor-heading h1, .detail-title-block h1,
 .profile-page-heading h1, .public-profile-header h1, .login-note h1 { font-family: var(--font-sans); font-size: clamp(30px, 4vw, var(--text-display)); font-weight: 600; line-height: 1.2; letter-spacing: -.03em; }
 .section-heading h2, .comments-heading h2, .login-panel h2 { font-size: var(--text-heading); font-weight: 600; line-height: 1.3; }
-.entry-row-title h3, .daily-prompt-card h3, .writers-card h3, .mood-week-card h3 { font-family: var(--font-sans); font-size: var(--text-subtitle); font-weight: 600; line-height: 1.45; letter-spacing: -.015em; }
+.entry-row-title h3, .writers-card h3, .mood-week-card h3 { font-family: var(--font-sans); font-size: var(--text-subtitle); font-weight: 600; line-height: 1.45; letter-spacing: -.015em; }
 .entry-row-title h3 { font-size: var(--text-subtitle); }
 .entry-excerpt { max-width: 76ch; font-size: var(--text-small); line-height: 1.75; }
 .entry-prose { max-width: 72ch; margin-inline: auto; color: #344a40; font-family: var(--font-sans); font-size: var(--text-body); line-height: 1.85; }
@@ -591,7 +588,7 @@ h3 { font-size: var(--text-subtitle); line-height: 1.4; }
 .notification-item small, .notification-item time, .notification-empty,
 .diary-quick-stats span, .result-count { font-size: var(--text-caption); }
 .tag, .entry-meta .tag, .detail-tags .tag { font-size: var(--text-caption); }
-.daily-prompt-card p:not(.eyebrow), .privacy-note p, .empty-state p, .loading-state,
+.privacy-note p, .empty-state p, .loading-state,
 .inline-error, .inline-success, .profile-edit-form input, .profile-edit-form textarea { font-size: var(--text-small); }
 .writers-card li strong { font-size: var(--text-caption); }
 .writers-card li small, .sidebar-heading > a, .privacy-note > a,
@@ -603,7 +600,7 @@ h3 { font-size: var(--text-subtitle); line-height: 1.4; }
   .intro-copy h1, .diary-heading h1, .detail-title-block h1,
   .profile-page-heading h1, .public-profile-header h1 { font-size: 30px; line-height: 1.2; }
   .section-heading h2, .comments-heading h2 { font-size: 24px; }
-  .entry-row-title h3, .daily-prompt-card h3, .writers-card h3,
+  .entry-row-title h3, .writers-card h3,
   .mood-week-card h3 { font-size: 18px; }
   .entry-excerpt { font-size: var(--text-small); line-height: 1.7; }
   .entry-prose { font-size: var(--text-body); line-height: 1.8; }
@@ -733,9 +730,9 @@ h3 { font-size: var(--text-subtitle); line-height: 1.4; }
 .popular-tag-row > span, .popular-tag-row button,
 .explore-filter-field, .explore-author-filter, .explore-tag-filter,
 .explore-feed-heading p:last-child, .intro-art-caption { font-size: var(--text-caption); }
-.daily-prompt-card p:not(.eyebrow), .writers-card li strong,
+.writers-card li strong,
 .writers-card li small, .follow-button, .social-action { font-size: var(--text-caption); }
-.daily-prompt-card h3, .writers-card h3, .mood-week-card h3 { font-size: var(--text-subtitle); }
+.writers-card h3, .mood-week-card h3 { font-size: var(--text-subtitle); }
 .explore-feed-heading h2 { font-size: 23px; }
 .explore-intro .intro-description { font-size: var(--text-small); }
 
@@ -790,16 +787,6 @@ h3 { font-size: var(--text-subtitle); line-height: 1.4; }
 .weekly-mood-bar > span { display: block; height: 100%; border-radius: inherit; background: #6e9275; }
 .weekly-mood-row > strong { color: var(--moss-deep); font-size: 14px; text-align: right; }
 .weekly-mood-empty { margin: 8px 0 0; color: var(--muted); font-size: 14px; }
-.diary-prompt-panel { border: 1px solid #eadfae; border-radius: 12px; padding: 14px; background: #fbf8eb; }
-.diary-prompt-panel .eyebrow { margin-bottom: 5px; color: #88713e; font-size: 14px; }
-.diary-prompt-panel h3 { margin: 0 0 6px; font-family: var(--font-sans); font-size: 17px; font-weight: 650; line-height: 1.45; }
-.diary-prompt-panel p:not(.eyebrow) { margin: 0 0 9px; color: #766b4d; font-size: 14px; }
-.diary-prompt-actions { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 7px; }
-.diary-prompt-actions > button, .diary-prompt-actions > a { display: flex; min-height: 36px; align-items: center; justify-content: center; border: 1px solid var(--moss-deep); border-radius: 7px; padding: 6px 8px; font-size: 14px; text-align: center; cursor: pointer; }
-.diary-prompt-actions > button { background: transparent; color: var(--moss-deep); }
-.diary-prompt-actions > a { background: var(--moss-deep); color: #fff; }
-.diary-prompt-actions > button:hover { background: #f1f4e9; }
-.diary-prompt-actions > a:hover { background: #294538; }
 .diary-feed { min-width: 0; }
 .diary-feed-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin: 2px 0 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
 .diary-feed-heading .eyebrow { margin-bottom: 2px; }
@@ -1183,8 +1170,6 @@ input, textarea, select { min-width: 0; max-width: 100%; }
   .diary-entry-list .entry-row-title h3 { overflow-wrap: anywhere; }
   .diary-entry-list .entry-meta { flex-wrap: wrap; }
   .weekly-mood-row { grid-template-columns: minmax(70px, 1fr) minmax(30px, 1.25fr) 14px; gap: 6px; }
-  .diary-prompt-actions { grid-template-columns: minmax(0, auto) minmax(0, 1fr); }
-  .diary-prompt-actions > button, .diary-prompt-actions > a { min-width: 0; padding-inline: 6px; font-size: 14px; }
   .site-footer { overflow-wrap: anywhere; }
 }
 
