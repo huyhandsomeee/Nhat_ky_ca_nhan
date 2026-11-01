@@ -4,9 +4,8 @@ import { api } from '../api';
 import { useAuth } from '../auth/AuthContext';
 import { EntryList } from '../components/EntryList';
 import { EmptyState, InlineError, Loading } from '../components/ui';
-import { MOODS, MOOD_EMOJI, capitalize, localToday } from '../shared/entryUtils';
+import { MOOD_EMOJI, capitalize, localToday } from '../shared/entryUtils';
 import { getAlternativeDailyPrompt, getDailyPrompt } from '../shared/dailyPrompt.mjs';
-import { getSearchHashtagFragment, parseEntrySearch, replaceSearchHashtag } from '../shared/searchFilters.mjs';
 
 const WEEKDAYS = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
@@ -18,8 +17,6 @@ export default function MyDiaryPage() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [stats, setStats] = useState(null);
   const [prompt, setPrompt] = useState(() => getDailyPrompt());
-  const [searchText, setSearchText] = useState('');
-  const [moodFilter, setMoodFilter] = useState('');
   const [visibilityFilter, setVisibilityFilter] = useState('');
   const [sort, setSort] = useState('newest');
   const [tagInput, setTagInput] = useState('');
@@ -28,7 +25,6 @@ export default function MyDiaryPage() {
   const [month, setMonth] = useState(() => localToday().slice(0, 7));
   const [calendarDays, setCalendarDays] = useState([]);
   const [tagSuggestions, setTagSuggestions] = useState([]);
-  const [searchSuggestions, setSearchSuggestions] = useState([]);
   const [popularTags, setPopularTags] = useState([]);
   const [status, setStatus] = useState('loading');
   const [calendarStatus, setCalendarStatus] = useState('loading');
@@ -39,26 +35,15 @@ export default function MyDiaryPage() {
   const weeklyMoodDistribution = Object.entries(stats?.weekMoodCounts || {}).sort((left, right) => right[1] - left[1]);
   const mostCommonMoodDays = weeklyMoodDistribution[0]?.[1] || 0;
   const mostCommonMoods = weeklyMoodDistribution.filter(([, count]) => count === mostCommonMoodDays).map(([mood]) => capitalize(mood));
-  const hasFilters = Boolean(moodFilter || visibilityFilter || tagFilter || selectedDate);
+  const hasFilters = Boolean(visibilityFilter || tagFilter || selectedDate);
 
   useEffect(() => { api('/api/entries/stats').then(setStats).catch(() => {}); }, []);
 
   useEffect(() => { api('/api/entries/tags/suggestions').then(({ suggestions }) => setPopularTags(suggestions || [])).catch(() => {}); }, []);
 
   useEffect(() => {
-    const fragment = getSearchHashtagFragment(searchText);
-    if (fragment === null) { setSearchSuggestions([]); return; }
-    let active = true;
-    const timer = setTimeout(() => api(`/api/entries/tags/suggestions?q=${encodeURIComponent(fragment)}`)
-      .then(({ suggestions }) => { if (active) setSearchSuggestions(suggestions); })
-      .catch(() => { if (active) setSearchSuggestions([]); }), 120);
-    return () => { active = false; clearTimeout(timer); };
-  }, [searchText]);
-
-  useEffect(() => {
     let active = true;
     const params = new URLSearchParams();
-    if (moodFilter) params.set('mood', moodFilter);
     if (visibilityFilter) params.set('visibility', visibilityFilter);
     if (tagFilter) params.set('tag', tagFilter);
     if (selectedDate) params.set('date', selectedDate);
@@ -69,12 +54,12 @@ export default function MyDiaryPage() {
       .then((data) => { if (active) { setEntries(data.entries); setHasMore(data.hasMore); setPage(1); setStatus('ready'); setError(''); } })
       .catch((reason) => { if (active) { setError(reason.message); setStatus('error'); } });
     return () => { active = false; };
-  }, [moodFilter, visibilityFilter, tagFilter, selectedDate, sort]);
+  }, [visibilityFilter, tagFilter, selectedDate, sort]);
 
   async function loadMore() {
     setLoadingMore(true);
     const params = new URLSearchParams({ page: String(page + 1), limit: '20' });
-    if (moodFilter) params.set('mood', moodFilter); if (visibilityFilter) params.set('visibility', visibilityFilter); if (tagFilter) params.set('tag', tagFilter); if (selectedDate) params.set('date', selectedDate); if (sort !== 'newest') params.set('sort', sort);
+    if (visibilityFilter) params.set('visibility', visibilityFilter); if (tagFilter) params.set('tag', tagFilter); if (selectedDate) params.set('date', selectedDate); if (sort !== 'newest') params.set('sort', sort);
     try { const data = await api(`/api/entries?${params}`); setEntries((current) => [...current, ...data.entries]); setHasMore(data.hasMore); setPage((current) => current + 1); }
     catch (reason) { setError(reason.message); }
     finally { setLoadingMore(false); }
@@ -105,29 +90,7 @@ export default function MyDiaryPage() {
     setTagSuggestions([]);
   }
 
-  function applySearch(value) {
-    const filters = parseEntrySearch(value);
-    setSelectedDate(filters.date);
-    setTagFilter(filters.tag);
-    setTagInput(filters.tag ? `#${filters.tag}` : '');
-    if (filters.date) setMonth(filters.date.slice(0, 7));
-  }
-
-  function submitSearch(event) {
-    event.preventDefault();
-    applySearch(searchText);
-  }
-
-  function chooseSearchSuggestion(tag) {
-    const nextText = replaceSearchHashtag(searchText, tag);
-    setSearchText(nextText);
-    applySearch(nextText);
-    setSearchSuggestions([]);
-  }
-
   function clearFilters() {
-    setSearchText('');
-    setMoodFilter('');
     setVisibilityFilter('');
     setSort('newest');
     setTagInput('');
@@ -164,15 +127,8 @@ export default function MyDiaryPage() {
       <Link className="button" to="/entries/new"><span aria-hidden="true">✎</span> Viết trang mới</Link>
     </section>
 
-    <section className="diary-toolbar" aria-label="Tìm và lọc nhật ký">
-      <form className="search-form diary-text-search" onSubmit={submitSearch} role="search">
-        <label className="sr-only" htmlFor="diary-search">Tìm theo ngày hoặc hashtag</label><span className="diary-search-icon" aria-hidden="true">⌕</span>
-        <div className="search-input-wrap"><input id="diary-search" value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Nhập ngày YYYY-MM-DD hoặc #hashtag..." aria-controls="diary-search-suggestions" aria-expanded={searchSuggestions.length > 0} />
-          {!!searchSuggestions.length && <div id="diary-search-suggestions" className="hashtag-suggestions" role="listbox" aria-label="Hashtag đang được sử dụng">{searchSuggestions.map(({ tag, uses }) => <button type="button" role="option" aria-selected="false" key={tag} onMouseDown={(event) => event.preventDefault()} onClick={() => chooseSearchSuggestion(tag)}><span>#{tag}</span><small>{uses}</small></button>)}</div>}
-        </div><button className="search-button" type="submit">Tìm</button>
-      </form>
+    <section className="diary-toolbar" aria-label="Lọc nhật ký">
       <div className="diary-filter-controls">
-        <label className="diary-filter-field"><span>Tâm trạng</span><select value={moodFilter} onChange={(event) => setMoodFilter(event.target.value)}><option value="">Tất cả tâm trạng</option>{MOODS.map((mood) => <option key={mood} value={mood}>{MOOD_EMOJI[mood]} {mood}</option>)}</select></label>
         <label className="diary-filter-field"><span>Hiển thị</span><select value={visibilityFilter} onChange={(event) => setVisibilityFilter(event.target.value)}><option value="">Tất cả bài viết</option><option value="private">Chỉ mình tôi</option><option value="public">Đang chia sẻ</option></select></label>
         <label className="diary-filter-field"><span>Sắp xếp</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">Mới nhất trước</option><option value="oldest">Cũ nhất trước</option></select></label>
         <div className="diary-filter-field hashtag-filter"><label htmlFor="diary-hashtag-filter">Hashtag</label><div className="hashtag-filter-wrap"><input id="diary-hashtag-filter" value={tagInput} onChange={(event) => { const value = event.target.value; setTagInput(value); setTagFilter(value.trim().replace(/^#+/, '')); }} placeholder="#tâm trạng" aria-controls="filter-tag-suggestions" aria-expanded={tagSuggestions.length > 0} />

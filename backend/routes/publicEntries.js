@@ -7,6 +7,7 @@ const EntryLike = require('../models/EntryLike');
 const SavedEntry = require('../models/SavedEntry');
 const Follow = require('../models/Follow');
 const { buildDateTagFilter, isCalendarDate } = require('../domain/entrySearch');
+const { buildVietnameseSearchPattern, escapeRegex } = require('../domain/vietnameseSearch');
 const { requireAuth, requireProfile } = require('../middleware/auth');
 const { canInteractWithEntry, normalizeReaction } = require('../domain/entryInteractionRules');
 
@@ -24,7 +25,7 @@ router.get('/', async (req, res, next) => {
     const following = followingFeed && req.user?._id;
     const sort = req.query.sort === 'oldest' ? { journalDate: 1, createdAt: 1 } : { journalDate: -1, createdAt: -1 };
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit, 10) || 20));
+    const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit, 10) || 7));
     if (mood) filter.mood = mood;
     if (following) {
       const followees = await Follow.find({ follower: req.user._id }).distinct('author');
@@ -32,11 +33,11 @@ router.get('/', async (req, res, next) => {
       if (validAuthor) filter.$and = [{ author: validAuthor }];
     } else if (followingFeed) filter.author = { $in: [] };
     else if (validAuthor) filter.author = validAuthor;
-    const [entries, totalPublic, authorIds] = await Promise.all([Entry.find(filter)
+    const [entries, totalEntries, totalPublic, authorIds] = await Promise.all([Entry.find(filter)
       .populate('author', 'displayName username avatarPath')
       .sort(sort)
       .skip((page - 1) * limit)
-      .limit(limit + 1), Entry.countDocuments({ visibility: 'public' }), Entry.distinct('author', { visibility: 'public' })]);
+      .limit(limit + 1), Entry.countDocuments(filter), Entry.countDocuments({ visibility: 'public' }), Entry.distinct('author', { visibility: 'public' })]);
     const hasMore = entries.length > limit;
     if (hasMore) entries.pop();
     const previewGroups = entries.length ? await Comment.aggregate([
@@ -80,7 +81,7 @@ router.get('/', async (req, res, next) => {
       const like = likeMap.get(String(entry._id));
       return { ...value, previewComments: previewsByEntry.get(String(entry._id)) || [], commentCount: commentCountMap.get(String(entry._id)) || 0, likeCount: like?.count || 0, likedByMe: Boolean(like?.liked), savedByMe: savedSet.has(String(entry._id)), followedByMe: followedSet.has(String(entry.author?._id)) };
     });
-    return res.json({ entries: entriesWithPreviews, date, page, hasMore, totalPublic, writerCount: authorIds.length });
+    return res.json({ entries: entriesWithPreviews, date, page, hasMore, totalEntries, totalPublic, writerCount: authorIds.length });
   } catch (error) {
     return next(error);
   }
@@ -140,7 +141,7 @@ router.get('/authors', async (req, res, next) => {
   try {
     const query = String(req.query.q || '').trim().replace(/^@/, '').slice(0, 60);
     const match = query ? { $or: [
-      { 'user.displayName': { $regex: escapeRegex(query), $options: 'i' } },
+      { 'user.displayName': { $regex: buildVietnameseSearchPattern(query), $options: 'i' } },
       { 'user.username': { $regex: escapeRegex(query), $options: 'i' } }
     ] } : null;
     const pipeline = [

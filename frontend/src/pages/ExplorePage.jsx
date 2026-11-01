@@ -6,7 +6,8 @@ import FollowButton from '../components/FollowButton';
 import { EntryList } from '../components/EntryList';
 import { EmptyState, InlineError, Loading, UserAvatar } from '../components/ui';
 import { MOODS, MOOD_EMOJI, capitalize } from '../shared/entryUtils';
-import { getSearchHashtagFragment, parseEntrySearch, replaceSearchHashtag } from '../shared/searchFilters.mjs';
+import { getAuthorSearchTerm, getSearchHashtagFragment, parseEntrySearch, replaceSearchAuthor, replaceSearchHashtag } from '../shared/searchFilters.mjs';
+import { getPageWindow, PAGE_SIZE } from '../shared/pagination.mjs';
 import { getDailyPrompt } from '../shared/dailyPrompt.mjs';
 
 export default function ExplorePage() {
@@ -16,28 +17,27 @@ export default function ExplorePage() {
   const [totalWriters, setTotalWriters] = useState(0);
   const [publicMetrics, setPublicMetrics] = useState({ totalPublic: 0, writerCount: 0 });
   const [searchText, setSearchText] = useState('');
-  const [date, setDate] = useState('');
   const [mood, setMood] = useState('');
   const [tag, setTag] = useState('');
   const [author, setAuthor] = useState('');
-  const [authorText, setAuthorText] = useState('');
+  const [authorUsername, setAuthorUsername] = useState('');
   const [authorSuggestions, setAuthorSuggestions] = useState([]);
   const [sort, setSort] = useState('newest');
   const [feed, setFeed] = useState('all');
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
+  const [totalEntries, setTotalEntries] = useState(0);
   const [tagSuggestions, setTagSuggestions] = useState([]);
   const [popularTags, setPopularTags] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
-  const [loadingMore, setLoadingMore] = useState(false);
 
   const prompt = getDailyPrompt();
-  const hasFilters = Boolean(date || mood || tag || author || sort !== 'newest');
+  const totalPages = Math.ceil(totalEntries / PAGE_SIZE);
+  const hasFilters = Boolean(mood || tag || author || sort !== 'newest');
 
   function paramsFor(nextPage = 1) {
-    const params = new URLSearchParams({ page: String(nextPage), limit: '20' });
-    if (date) params.set('date', date);
+    const params = new URLSearchParams({ page: String(nextPage), limit: String(PAGE_SIZE) });
     if (mood) params.set('mood', mood);
     if (tag) params.set('tag', tag);
     if (author) params.set('author', author);
@@ -54,43 +54,46 @@ export default function ExplorePage() {
   useEffect(() => {
     let active = true;
     setStatus('loading');
-    api(`/api/public/entries?${paramsFor(1)}`)
+    api(`/api/public/entries?${paramsFor(page)}`)
       .then((data) => {
         if (!active) return;
         setEntries(data.entries);
         setHasMore(data.hasMore);
+        setTotalEntries(data.totalEntries || 0);
         setPublicMetrics({ totalPublic: data.totalPublic || 0, writerCount: data.writerCount || 0 });
-        setPage(1);
         setStatus('ready');
         setError('');
       })
       .catch((reason) => { if (active) { setError(reason.message); setStatus('error'); } });
     return () => { active = false; };
-  }, [date, mood, tag, author, sort, feed]);
+  }, [mood, tag, author, sort, feed, page]);
 
   useEffect(() => {
     const fragment = getSearchHashtagFragment(searchText);
-    if (fragment === null) { setTagSuggestions([]); return; }
+    const appliedTag = parseEntrySearch(searchText).tag;
+    if (fragment === null || (tag && appliedTag.toLocaleLowerCase('vi-VN') === tag.toLocaleLowerCase('vi-VN'))) { setTagSuggestions([]); return; }
     let active = true;
     const timer = setTimeout(() => api(`/api/public/entries/tags/suggestions?q=${encodeURIComponent(fragment)}`)
       .then(({ suggestions }) => { if (active) setTagSuggestions(suggestions); })
       .catch(() => { if (active) setTagSuggestions([]); }), 120);
     return () => { active = false; clearTimeout(timer); };
-  }, [searchText]);
+  }, [searchText, tag]);
 
   useEffect(() => {
-    if (!authorText.trim()) { setAuthorSuggestions([]); return; }
+    if (authorUsername && searchText.includes(`@${authorUsername}`)) { setAuthorSuggestions([]); return; }
+    const authorQuery = getAuthorSearchTerm(searchText);
+    if (!authorQuery) { setAuthorSuggestions([]); return; }
     let active = true;
-    const timer = setTimeout(() => api(`/api/public/entries/authors?q=${encodeURIComponent(authorText.trim())}`)
+    const timer = setTimeout(() => api(`/api/public/entries/authors?q=${encodeURIComponent(authorQuery)}`)
       .then(({ authors }) => { if (active) setAuthorSuggestions(authors || []); })
       .catch(() => { if (active) setAuthorSuggestions([]); }), 160);
     return () => { active = false; clearTimeout(timer); };
-  }, [authorText]);
+  }, [searchText, authorUsername]);
 
   function applySearch(value) {
     const filters = parseEntrySearch(value);
-    setDate(filters.date);
     setTag(filters.tag);
+    setPage(1);
   }
   function submitSearch(event) { event.preventDefault(); applySearch(searchText); }
   function chooseTagSuggestion(value) {
@@ -99,19 +102,22 @@ export default function ExplorePage() {
     applySearch(nextText);
     setTagSuggestions([]);
   }
-  function selectTag(value) { setTag((current) => current.toLocaleLowerCase('vi-VN') === value.toLocaleLowerCase('vi-VN') ? '' : value); }
-  function clearFilters() {
-    setSearchText(''); setDate(''); setMood(''); setTag(''); setAuthor(''); setAuthorText(''); setSort('newest');
+  function chooseAuthorSuggestion(writer) {
+    const nextText = replaceSearchAuthor(searchText, writer.username);
+    setSearchText(nextText);
+    setAuthor(writer._id);
+    setAuthorUsername(writer.username);
+    setAuthorSuggestions([]);
+    applySearch(nextText);
   }
-  async function loadMore() {
-    setLoadingMore(true);
-    try {
-      const data = await api(`/api/public/entries?${paramsFor(page + 1)}`);
-      setEntries((current) => [...current, ...data.entries]);
-      setHasMore(data.hasMore);
-      setPage((current) => current + 1);
-    } catch (reason) { setError(reason.message); }
-    finally { setLoadingMore(false); }
+  function selectTag(value) {
+    const nextTag = tag.toLocaleLowerCase('vi-VN') === value.toLocaleLowerCase('vi-VN') ? '' : value;
+    setTag(nextTag);
+    setSearchText([nextTag ? `#${nextTag}` : '', authorUsername ? `@${authorUsername}` : ''].filter(Boolean).join(' '));
+    setPage(1);
+  }
+  function clearFilters() {
+    setSearchText(''); setMood(''); setTag(''); setAuthor(''); setAuthorUsername(''); setAuthorSuggestions([]); setSort('newest'); setPage(1);
   }
 
   return <>
@@ -128,14 +134,14 @@ export default function ExplorePage() {
     <section className="explore-toolbar" aria-label="Tìm và lọc bài viết">
       <div className="explore-main-filters">
         <form className="search-form explore-text-search" onSubmit={submitSearch} role="search">
-          <label className="sr-only" htmlFor="explore-search">Tìm theo ngày hoặc hashtag</label><span className="search-symbol" aria-hidden="true">⌕</span>
-          <div className="search-input-wrap"><input id="explore-search" value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="Nhập ngày YYYY-MM-DD hoặc #hashtag..." aria-controls="explore-tag-suggestions" aria-expanded={tagSuggestions.length > 0} />
-            {!!tagSuggestions.length && <div id="explore-tag-suggestions" className="hashtag-suggestions" role="listbox" aria-label="Hashtag đang được sử dụng">{tagSuggestions.map(({ tag: value, uses }) => <button type="button" role="option" aria-selected="false" key={value} onMouseDown={(event) => event.preventDefault()} onClick={() => chooseTagSuggestion(value)}><span>#{value}</span><small>{uses}</small></button>)}</div>}
+          <label className="sr-only" htmlFor="explore-search">Tìm theo hashtag hoặc người dùng</label><span className="search-symbol" aria-hidden="true">⌕</span>
+          <div className="search-input-wrap"><input id="explore-search" name="explore-filter-query" autoComplete="off" value={searchText} onChange={(event) => { const value = event.target.value; setSearchText(value); if (authorUsername && !value.includes(`@${authorUsername}`)) { setAuthor(''); setAuthorUsername(''); setPage(1); } }} placeholder="#hashtag hoặc tên/@username..." aria-controls="explore-search-suggestions" aria-expanded={tagSuggestions.length > 0 || authorSuggestions.length > 0} />
+            {!!tagSuggestions.length && getSearchHashtagFragment(searchText) !== null && <div id="explore-search-suggestions" className="hashtag-suggestions" role="listbox" aria-label="Hashtag đang được sử dụng">{tagSuggestions.map(({ tag: value, uses }) => <button type="button" role="option" aria-selected="false" key={value} onMouseDown={(event) => event.preventDefault()} onClick={() => chooseTagSuggestion(value)}><span>#{value}</span><small>{uses}</small></button>)}</div>}
+            {!!authorSuggestions.length && getSearchHashtagFragment(searchText) === null && <div id="explore-search-suggestions" className="hashtag-suggestions" role="listbox" aria-label="Người viết có bài công khai">{authorSuggestions.map((writer) => <button type="button" role="option" aria-selected={author === writer._id} key={writer._id} onMouseDown={(event) => event.preventDefault()} onClick={() => chooseAuthorSuggestion(writer)}><span>{writer.displayName}<small className="author-suggestion-username">@{writer.username}</small></span><small>{writer.publicEntryCount} bài</small></button>)}</div>}
           </div><button className="search-button" type="submit">Tìm</button>
         </form>
-        <div className="explore-author-filter author-filter-wrap"><label htmlFor="explore-author">Tác giả</label><input id="explore-author" value={authorText} onChange={(event) => { setAuthorText(event.target.value); setAuthor(''); }} placeholder="Tên hoặc @username" aria-controls="explore-author-suggestions" aria-expanded={authorSuggestions.length > 0} />{!!authorSuggestions.length && <div id="explore-author-suggestions" className="hashtag-suggestions" role="listbox" aria-label="Tác giả có bài công khai">{authorSuggestions.map((writer) => <button type="button" role="option" aria-selected={author === writer._id} key={writer._id} onMouseDown={(event) => event.preventDefault()} onClick={() => { setAuthor(writer._id); setAuthorText(`${writer.displayName} (@${writer.username})`); setAuthorSuggestions([]); }}><span>{writer.displayName}<small className="author-suggestion-username">@{writer.username}</small></span><small>{writer.publicEntryCount} bài</small></button>)}</div>}</div>
-        <label className="toolbar-select"><span className="sr-only">Lọc tâm trạng</span><select value={mood} onChange={(event) => setMood(event.target.value)}><option value="">Mọi tâm trạng</option>{MOODS.map((value) => <option key={value} value={value}>{MOOD_EMOJI[value]} {capitalize(value)}</option>)}</select></label>
-        <label className="toolbar-select"><span className="sr-only">Sắp xếp bài viết</span><select value={sort} onChange={(event) => setSort(event.target.value)}><option value="newest">Mới nhất trước</option><option value="oldest">Cũ nhất trước</option></select></label>
+        <label className="toolbar-select"><span className="sr-only">Lọc tâm trạng</span><select value={mood} onChange={(event) => { setMood(event.target.value); setPage(1); }}><option value="">Mọi tâm trạng</option>{MOODS.map((value) => <option key={value} value={value}>{MOOD_EMOJI[value]} {capitalize(value)}</option>)}</select></label>
+        <label className="toolbar-select"><span className="sr-only">Sắp xếp bài viết</span><select value={sort} onChange={(event) => { setSort(event.target.value); setPage(1); }}><option value="newest">Mới nhất trước</option><option value="oldest">Cũ nhất trước</option></select></label>
         {hasFilters && <button type="button" className="text-button explore-clear" onClick={clearFilters}>Xóa bộ lọc</button>}
       </div>
       <div className="popular-tag-row"><span>Chủ đề gợi ý:</span>{popularTags.map(({ tag: value }) => <button type="button" key={value} className={tag === value ? 'selected' : ''} aria-pressed={tag === value} onClick={() => selectTag(value)}>#{value}</button>)}</div>
@@ -145,12 +151,12 @@ export default function ExplorePage() {
       <section className="content-section explore-feed-section" aria-labelledby="explore-heading">
         <div className="explore-feed-heading">
           <div><p className="eyebrow">Trang viết vừa hé mở</p><h2 id="explore-heading">{feed === 'following' ? 'Từ người bạn theo dõi' : 'Những câu chuyện gần đây'}</h2><p>Cập nhật theo thời gian gần nhất</p></div>
-          <div className="explore-feed-tabs" role="tablist" aria-label="Luồng bài viết"><button role="tab" aria-selected={feed === 'all'} className={feed === 'all' ? 'selected' : ''} onClick={() => setFeed('all')}>Tất cả</button><button role="tab" aria-selected={feed === 'following'} className={feed === 'following' ? 'selected' : ''} onClick={() => setFeed('following')} disabled={!user}>Đang theo dõi</button></div>
-          <span className="result-count">{publicMetrics.totalPublic} câu chuyện</span>
+          <div className="explore-feed-tabs" role="tablist" aria-label="Luồng bài viết"><button role="tab" aria-selected={feed === 'all'} className={feed === 'all' ? 'selected' : ''} onClick={() => { setFeed('all'); setPage(1); }}>Tất cả</button><button role="tab" aria-selected={feed === 'following'} className={feed === 'following' ? 'selected' : ''} onClick={() => { setFeed('following'); setPage(1); }} disabled={!user}>Đang theo dõi</button></div>
+          <span className="result-count">{totalEntries} câu chuyện</span>
         </div>
         {status === 'loading' && <Loading />}
         {status === 'error' && <InlineError message={error} />}
-        {status === 'ready' && (entries.length ? <><EntryList entries={entries} publicPage />{hasMore && <div className="load-more-wrap"><button className="button button-outline" onClick={loadMore} disabled={loadingMore}>{loadingMore ? 'Đang tải…' : 'Xem thêm những trang cũ hơn'}</button></div>}</> : <EmptyState title={feed === 'following' ? 'Luồng theo dõi đang yên ắng.' : hasFilters ? 'Chưa tìm thấy trang viết phù hợp.' : 'Góc này đang yên ắng.'} body={feed === 'following' ? 'Theo dõi một tác giả để thấy bài viết công khai của họ tại đây.' : 'Thử thay đổi bộ lọc hoặc quay lại sau nhé.'} action={hasFilters ? <button className="button button-outline" type="button" onClick={clearFilters}>Xóa bộ lọc</button> : undefined} />)}
+        {status === 'ready' && (entries.length ? <><EntryList entries={entries} publicPage /><nav className="explore-pagination" aria-label="Phân trang bài viết"><button type="button" className="pagination-step" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page === 1} aria-label="Trang trước">‹</button>{getPageWindow(page, totalPages).map((pageNumber) => <button type="button" key={pageNumber} className={pageNumber === page ? 'active' : ''} aria-current={pageNumber === page ? 'page' : undefined} onClick={() => setPage(pageNumber)}>{pageNumber}</button>)}<button type="button" className="pagination-step" onClick={() => setPage((current) => Math.min(totalPages, current + 1))} disabled={!hasMore} aria-label="Trang sau">›</button></nav></> : <EmptyState title={feed === 'following' ? 'Luồng theo dõi đang yên ắng.' : hasFilters ? 'Chưa tìm thấy trang viết phù hợp.' : 'Góc này đang yên ắng.'} body={feed === 'following' ? 'Theo dõi một tác giả để thấy bài viết công khai của họ tại đây.' : 'Thử thay đổi bộ lọc hoặc quay lại sau nhé.'} action={hasFilters ? <button className="button button-outline" type="button" onClick={clearFilters}>Xóa bộ lọc</button> : undefined} />)}
       </section>
       <aside className="explore-sidebar">
         <section className="daily-prompt-card"><p className="eyebrow">✦ Gợi ý hôm nay</p><h3>“{prompt}”</h3><p>Một câu hỏi nhỏ để giúp bạn bắt đầu viết.</p>{user ? <Link to="/entries/new" state={{ prompt }}>✎ Viết chia sẻ về chủ đề này</Link> : <Link to="/login">Đăng nhập để viết</Link>}</section>
