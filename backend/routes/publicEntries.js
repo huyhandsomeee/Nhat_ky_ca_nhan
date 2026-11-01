@@ -6,6 +6,7 @@ const Notification = require('../models/Notification');
 const EntryLike = require('../models/EntryLike');
 const SavedEntry = require('../models/SavedEntry');
 const Follow = require('../models/Follow');
+const { buildDateTagFilter, isCalendarDate } = require('../domain/entrySearch');
 const { requireAuth, requireProfile } = require('../middleware/auth');
 const { canInteractWithEntry, normalizeReaction } = require('../domain/entryInteractionRules');
 
@@ -13,10 +14,10 @@ const router = express.Router();
 
 router.get('/', async (req, res, next) => {
   try {
-    const search = String(req.query.q || '').trim().slice(0, 100);
-    const filter = { visibility: 'public' };
+    const date = String(req.query.date || '').trim();
+    if (date && !isCalendarDate(date)) return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Ngày nhật ký không hợp lệ.' } });
+    const filter = { visibility: 'public', ...buildDateTagFilter({ date, tag: req.query.tag }) };
     const mood = String(req.query.mood || '').trim();
-    const tag = String(req.query.tag || '').trim().replace(/^#+/, '').slice(0, 30);
     const author = String(req.query.author || '').trim();
     const validAuthor = author && mongoose.isValidObjectId(author) ? new mongoose.Types.ObjectId(author) : null;
     const followingFeed = req.query.feed === 'following';
@@ -24,9 +25,7 @@ router.get('/', async (req, res, next) => {
     const sort = req.query.sort === 'oldest' ? { journalDate: 1, createdAt: 1 } : { journalDate: -1, createdAt: -1 };
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit, 10) || 20));
-    if (search) filter.$or = searchConditions(search);
     if (mood) filter.mood = mood;
-    if (tag) filter.tags = { $regex: `^${escapeRegex(tag)}$`, $options: 'i' };
     if (following) {
       const followees = await Follow.find({ follower: req.user._id }).distinct('author');
       filter.author = { $in: followees };
@@ -81,7 +80,7 @@ router.get('/', async (req, res, next) => {
       const like = likeMap.get(String(entry._id));
       return { ...value, previewComments: previewsByEntry.get(String(entry._id)) || [], commentCount: commentCountMap.get(String(entry._id)) || 0, likeCount: like?.count || 0, likedByMe: Boolean(like?.liked), savedByMe: savedSet.has(String(entry._id)), followedByMe: followedSet.has(String(entry.author?._id)) };
     });
-    return res.json({ entries: entriesWithPreviews, search, page, hasMore, totalPublic, writerCount: authorIds.length });
+    return res.json({ entries: entriesWithPreviews, date, page, hasMore, totalPublic, writerCount: authorIds.length });
   } catch (error) {
     return next(error);
   }
@@ -139,7 +138,7 @@ router.get('/writers', async (req, res, next) => {
 
 router.get('/authors', async (req, res, next) => {
   try {
-    const query = String(req.query.q || '').trim().slice(0, 60);
+    const query = String(req.query.q || '').trim().replace(/^@/, '').slice(0, 60);
     const match = query ? { $or: [
       { 'user.displayName': { $regex: escapeRegex(query), $options: 'i' } },
       { 'user.username': { $regex: escapeRegex(query), $options: 'i' } }
@@ -244,16 +243,6 @@ router.post('/:id/comments/:commentId/reactions', requireAuth, requireProfile, a
     return res.json({ comment });
   } catch (error) { return next(error); }
 });
-
-function searchConditions(search) {
-  const pattern = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const tagSearch = search.replace(/^#+/, '').trim();
-  const conditions = [{ title: { $regex: pattern, $options: 'i' } }, { content: { $regex: pattern, $options: 'i' } }];
-  if (tagSearch) conditions.push({ tags: { $regex: tagSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } });
-  return conditions;
-}
-
-function escapeRegex(value) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 function notFound(res) {
   return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Không tìm thấy bài viết.' } });

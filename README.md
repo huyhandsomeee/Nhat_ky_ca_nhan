@@ -22,7 +22,7 @@ Website quản lý nhật ký cá nhân, dùng React, Rolldown, Express và Mong
 - Tìm bài trong nhật ký cá nhân hoặc trong các bài công khai.
 - Ai cũng đọc được bài công khai; người dùng đăng nhập có thể bình luận.
 - Góc chia sẻ có luồng bài từ người đang theo dõi, lọc theo tâm trạng/hashtag/tác giả và sắp xếp bài; có thể thích hoặc lưu bài công khai.
-- Sổ của tôi có lịch, bộ lọc, thống kê cảm xúc 7 ngày và chuỗi ngày viết (streak) tính theo ngày nhật ký tại múi giờ `Asia/Ho_Chi_Minh`.
+- Sổ của tôi có lịch, bộ lọc và thống kê cảm xúc 7 ngày.
 - Bài đã lưu chỉ người lưu xem được; hồ sơ công khai chỉ hiển thị số bài công khai.
 - Bài viết có emoji tâm trạng và thanh chèn emoji; bài đang tạo được lưu nháp tự động theo tài khoản.
 - Bình luận trên bài công khai hỗ trợ trả lời theo luồng và thả 👍 ❤️ 😂 😮 😢 🙏.
@@ -97,7 +97,7 @@ Mở <http://localhost:3000>.
 | `POST` | `/api/auth/logout` | Đăng xuất |
 | `GET`, `POST` | `/api/entries` | Tìm kiếm, lọc/liệt kê hoặc tạo bài nhật ký của tôi |
 | `GET` | `/api/entries/calendar?month=YYYY-MM` | Đếm bài nhật ký theo ngày trong tháng |
-| `GET` | `/api/entries/stats` | Thống kê tháng, cảm xúc tuần và streak riêng của tôi |
+| `GET` | `/api/entries/stats` | Thống kê tháng và cảm xúc tuần của tôi |
 | `GET`, `PUT`, `DELETE` | `/api/entries/:id` | Đọc/sửa/xóa bài của tôi |
 | `DELETE` | `/api/entries/:entryId/comments/:commentId` | Xóa bình luận theo quyền |
 | `GET` | `/api/public/entries` | Tìm và liệt kê bài công khai |

@@ -71,7 +71,7 @@ export default function MyProfilePage() {
     <div className="profile-page-heading profile-hero-card">
       <UserAvatar src={user?.avatarUrl} name={displayName} className="profile-avatar-large" />
       <div><p className="eyebrow">Hồ sơ cá nhân</p><h1>{displayName || 'Hồ sơ của bạn'}</h1><p className="profile-username">@{user?.username}</p><p>Tên và ảnh của bạn sẽ hiện cạnh những bài nhật ký công khai.</p></div>
-      {stats && <div className="profile-private-stats"><span><strong>{stats.monthCount}</strong><small>trang tháng này</small></span><span><strong>🔥 {stats.currentStreak}</strong><small>ngày streak</small></span></div>}
+      {stats && <div className="profile-private-stats"><span><strong>{stats.monthCount}</strong><small>trang tháng này</small></span></div>}
     </div>
     {(error || message) && <div className={error ? 'inline-error' : 'inline-success'} role={error ? 'alert' : 'status'}>{error || message}</div>}
     <div className="profile-edit-layout">

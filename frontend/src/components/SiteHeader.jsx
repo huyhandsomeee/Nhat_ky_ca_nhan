@@ -12,14 +12,6 @@ export default function Header() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [currentStreak, setCurrentStreak] = useState(0);
-
-  useEffect(() => {
-    if (!user || user.needsProfileSetup) { setCurrentStreak(0); return; }
-    let active = true;
-    api('/api/entries/stats').then((data) => { if (active) setCurrentStreak(data.currentStreak || 0); }).catch(() => {});
-    return () => { active = false; };
-  }, [user?.id, user?.needsProfileSetup]);
 
   useEffect(() => {
     if (!user || user.needsProfileSetup) {
@@ -94,7 +86,6 @@ export default function Header() {
         {user && !user.needsProfileSetup && <Link to="/saved">Bài đã lưu</Link>}
       </nav>
       <div className="header-actions">
-        {user && !user.needsProfileSetup && <Link to="/my-diary" className="header-streak" title="Chuỗi ngày viết nhật ký">🔥 {currentStreak} ngày streak</Link>}
         {user && !user.needsProfileSetup && <div className="notification-area">
           <button className="notification-toggle" type="button" aria-expanded={notificationsOpen} aria-controls="header-notifications" onClick={() => {
             setNotificationsOpen((open) => !open);

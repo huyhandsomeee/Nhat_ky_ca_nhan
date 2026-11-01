@@ -6,7 +6,7 @@ import { useAuth } from '../auth/AuthContext';
 import { InlineError, Loading, UserAvatar } from '../components/ui';
 import FollowButton from '../components/FollowButton';
 import { MOOD_EMOJI, REACTIONS, capitalize, formatCompactMonthYear, formatDay, formatLongDate, formatShortWeekday, formatTimestamp, getCommentDepth } from '../shared/entryUtils';
-import { getDailyPrompt } from '../shared/dailyPrompt';
+import { getDailyPrompt } from '../shared/dailyPrompt.mjs';
 
 export default function EntryDetailPage({ publicPage = false }) {
   const { id } = useParams();

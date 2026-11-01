@@ -4,7 +4,8 @@ const Entry = require('../models/Entry');
 const Comment = require('../models/Comment');
 const EntryLike = require('../models/EntryLike');
 const SavedEntry = require('../models/SavedEntry');
-const { calculateStreaks, dateInVietnam } = require('../domain/diaryStats');
+const { moodsByDateFromLatestEntries, summarizeMoodWeek } = require('../domain/moodStats');
+const { buildDateTagFilter, isCalendarDate } = require('../domain/entrySearch');
 const { requireAuth, requireProfile } = require('../middleware/auth');
 const { MOODS, validateEntryInput, normalizeEntryInput, canDeleteComment } = require('../domain/entryRules');
 
@@ -13,25 +14,22 @@ router.use(requireAuth, requireProfile);
 
 router.get('/stats', async (req, res, next) => {
   try {
-    const today = dateInVietnam();
-    const [dates, totalCount, monthCount, moods, weekEntries] = await Promise.all([
-      Entry.distinct('journalDate', { author: req.user._id }),
+    const today = vietnameseToday();
+    const [totalCount, monthCount, moods, weekEntries] = await Promise.all([
       Entry.countDocuments({ author: req.user._id }),
       Entry.countDocuments({ author: req.user._id, journalDate: { $regex: `^${today.slice(0, 7)}-` } }),
       Entry.aggregate([{ $match: { author: req.user._id, journalDate: { $regex: `^${today.slice(0, 7)}-` }, mood: { $ne: null } } }, { $group: { _id: '$mood', count: { $sum: 1 } } }, { $sort: { count: -1, _id: 1 } }, { $limit: 1 }]),
       Entry.find({ author: req.user._id, journalDate: { $gte: shiftDate(today, -6), $lte: today } }).select('journalDate mood createdAt').sort({ createdAt: -1 }).lean()
     ]);
-    const streaks = calculateStreaks(dates, today);
-    const moodByDate = {};
-    for (const entry of weekEntries) if (entry.mood && !moodByDate[entry.journalDate]) moodByDate[entry.journalDate] = entry.mood;
+    const moodByDate = moodsByDateFromLatestEntries(weekEntries);
     const week = Array.from({ length: 7 }, (_, index) => { const date = shiftDate(today, index - 6); return { date, mood: moodByDate[date] || null }; });
-    return res.json({ today, totalCount, monthCount, popularMood: moods[0]?._id || null, week, ...streaks });
+    const weeklyMoodSummary = summarizeMoodWeek(week);
+    return res.json({ today, totalCount, monthCount, popularMood: moods[0]?._id || null, week, ...weeklyMoodSummary });
   } catch (error) { return next(error); }
 });
 
 router.get('/', async (req, res, next) => {
   try {
-    const search = String(req.query.q || '').trim().slice(0, 100);
     const mood = String(req.query.mood || '').trim();
     const visibility = String(req.query.visibility || '').trim();
     const tag = String(req.query.tag || '').trim().replace(/^#+/, '').slice(0, 30);
@@ -45,17 +43,15 @@ router.get('/', async (req, res, next) => {
     if (!['newest', 'oldest'].includes(sortOrder)) return validationResponse(res, [{ field: 'sort', message: 'Thứ tự sắp xếp không hợp lệ.' }]);
 
     const conditions = [{ author: req.user._id }];
-    if (search) conditions.push({ $or: searchConditions(search) });
+    for (const [field, value] of Object.entries(buildDateTagFilter({ date, tag }))) conditions.push({ [field]: value });
     if (mood) conditions.push({ mood });
     if (visibility) conditions.push({ visibility });
-    if (tag) conditions.push({ tags: { $regex: `^${escapeRegex(tag)}$`, $options: 'i' } });
-    if (date) conditions.push({ journalDate: date });
     const filter = conditions.length === 1 ? conditions[0] : { $and: conditions };
     const sort = sortOrder === 'oldest' ? { journalDate: 1, createdAt: 1 } : { journalDate: -1, createdAt: -1 };
     const entries = await Entry.find(filter).populate('author', 'username displayName avatarPath').sort(sort).skip((page - 1) * limit).limit(limit + 1);
     const hasMore = entries.length > limit;
     if (hasMore) entries.pop();
-    res.json({ entries, search, page, hasMore });
+    res.json({ entries, date, page, hasMore });
   } catch (error) {
     next(error);
   }
@@ -182,22 +178,6 @@ function validationResponse(res, errors) {
       fields: Object.fromEntries(errors.map((error) => [error.field, error.message]))
     }
   });
-}
-
-function searchConditions(search) {
-  const pattern = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const tagSearch = search.replace(/^#+/, '').trim();
-  const conditions = [{ title: { $regex: pattern, $options: 'i' } }, { content: { $regex: pattern, $options: 'i' } }];
-  if (tagSearch) conditions.push({ tags: { $regex: tagSearch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' } });
-  return conditions;
-}
-
-function escapeRegex(value) { return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-
-function isCalendarDate(value) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const date = new Date(`${value}T00:00:00.000Z`);
-  return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
 }
 
 function notFound(res) {

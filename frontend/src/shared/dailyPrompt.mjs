@@ -11,3 +11,10 @@ export function getDailyPrompt(now = new Date()) {
   const index = date.split('-').reduce((sum, part) => sum + Number(part), 0) % PROMPTS.length;
   return PROMPTS[index];
 }
+
+export function getAlternativeDailyPrompt(currentPrompt, random = Math.random) {
+  const alternatives = PROMPTS.filter((prompt) => prompt !== currentPrompt);
+  if (!alternatives.length) return currentPrompt;
+  const index = Math.min(alternatives.length - 1, Math.floor(random() * alternatives.length));
+  return alternatives[Math.max(0, index)];
+}
