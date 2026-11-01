@@ -6,7 +6,6 @@ import { useAuth } from '../auth/AuthContext';
 import { InlineError, Loading, UserAvatar } from '../components/ui';
 import FollowButton from '../components/FollowButton';
 import { MOOD_EMOJI, REACTIONS, capitalize, formatCompactMonthYear, formatDay, formatLongDate, formatShortWeekday, formatTimestamp, getCommentDepth } from '../shared/entryUtils';
-import { getDailyPrompt } from '../shared/dailyPrompt.mjs';
 
 export default function EntryDetailPage({ publicPage = false }) {
   const { id } = useParams();
@@ -30,7 +29,6 @@ export default function EntryDetailPage({ publicPage = false }) {
   const [saved, setSaved] = useState(false);
   const [actionError, setActionError] = useState('');
   const authorId = entry?.author?._id || entry?.author;
-  const dailyPrompt = getDailyPrompt();
 
   async function loadEntry() {
     setStatus('loading');
@@ -200,7 +198,6 @@ export default function EntryDetailPage({ publicPage = false }) {
         </div>
       </section>}
       {relatedEntries.length > 0 && <section className="detail-sidebar-card detail-related-card"><div className="detail-sidebar-heading"><h2>Bài viết gần đây</h2><Link to={`/people/${authorId}`}>Xem hồ sơ</Link></div>{relatedEntries.map((item) => <Link className="detail-related-entry" key={item._id} to={`/explore/${item._id}`}><time>{formatLongDate(item.journalDate)}</time><strong>{item.title}</strong><span>{item.content}</span></Link>)}</section>}
-      <section className="detail-prompt-card"><p className="eyebrow">✦ Gợi ý hôm nay</p><p>“{dailyPrompt}”</p>{user && <Link to="/entries/new">Viết nhật ký</Link>}</section>
     </aside>
   </div>;
 }

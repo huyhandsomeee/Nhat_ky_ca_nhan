@@ -411,6 +411,12 @@ h1, h2, h3 { color: var(--ink); }
 .login-panel h2 { margin: 0; font-size: 28px; font-weight: 500; letter-spacing: -.035em; color: var(--ink); }
 .auth-desc { margin: 8px 0 22px; color: var(--muted); font-size: 15px; line-height: 1.6; }
 .auth-form { display: grid; gap: 16px; }
+.password-input-wrap { position: relative; }
+.password-input-wrap input { padding-right: 48px; }
+.password-visibility-toggle { position: absolute; top: 50%; right: 7px; display: grid; width: 34px; height: 34px; transform: translateY(-50%); place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.password-visibility-toggle:hover { background: #edf2ed; color: var(--moss-deep); }
+.password-visibility-toggle:focus-visible { outline: 2px solid #89a28b; }
+.password-visibility-toggle svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
 .auth-submit-btn { width: 100%; min-height: 46px; margin-top: 8px; font-size: 16px; }
 .auth-switch-links { margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 15px; color: var(--muted); line-height: 1.8; }
 .auth-switch-links p { margin: 4px 0 0; }
@@ -904,10 +910,6 @@ h3 { font-size: var(--text-subtitle); line-height: 1.4; }
 .detail-related-entry time { color: var(--muted); font-size: 14px; }
 .detail-related-entry strong { color: var(--ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.35; }
 .detail-related-entry span { display: -webkit-box; overflow: hidden; color: var(--muted); font-size: 14px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.detail-prompt-card { border: 1px solid #244334; border-radius: 11px; padding: 14px; background: #1f3c2e; color: #fff; }
-.detail-prompt-card .eyebrow { margin-bottom: 7px; color: #c5d7c9; font-size: 14px; }
-.detail-prompt-card > p:nth-child(2) { margin: 0 0 10px; font-family: var(--font-sans); font-size: 15px; font-weight: 600; line-height: 1.45; }
-.detail-prompt-card > a { display: block; border-radius: 6px; padding: 6px 8px; background: #e8f0e9; color: #234331; font-size: 14px; text-align: center; text-decoration: none; }
 
 /* Personal entry detail uses the same soft paper cards as the public reading view. */
 .private-entry-detail { width: min(930px, 100%); max-width: none; margin: 0 auto; padding: 26px 0 65px; }
@@ -969,7 +971,6 @@ h3 { font-size: var(--text-subtitle); line-height: 1.4; }
 @media (max-width: 860px) {
   .public-entry-detail-layout { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 20px 0 45px; }
   .public-entry-detail-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-top: 0; }
-  .detail-prompt-card { grid-column: 1 / -1; }
 }
 @media (max-width: 560px) {
   .public-entry-detail-layout { padding: 12px 0 35px; }
@@ -986,7 +987,6 @@ h3 { font-size: var(--text-subtitle); line-height: 1.4; }
   .public-entry-detail .comments-section { padding: 13px 12px 15px; }
   .public-entry-detail .comments-heading > small { max-width: 125px; text-align: right; }
   .public-entry-detail-sidebar { grid-template-columns: minmax(0, 1fr); }
-  .detail-prompt-card { grid-column: auto; }
   .writers-directory { padding: 20px 0 45px; }
   .writers-directory-heading { align-items: start; }
   .writers-directory-heading h1 { font-size: 29px; }

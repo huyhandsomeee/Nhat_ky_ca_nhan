@@ -8,6 +8,8 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [displayName, setDisplayName] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -124,28 +126,40 @@ export default function LoginPage() {
           hint={mode === 'register' || mode === 'reset' ? 'Tối thiểu 6 ký tự' : undefined}
           error={fieldErrors.password || fieldErrors.newPassword}
         >
-          <input
-            id="auth-password"
-            type="password"
-            required
-            minLength={6}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="••••••••"
-          />
+          <div className="password-input-wrap">
+            <input
+              id="auth-password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+              required
+              minLength={6}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={mode === 'reset' ? undefined : '••••••••'}
+            />
+            <button className="password-visibility-toggle" type="button" onClick={() => setShowPassword((visible) => !visible)} aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'} aria-pressed={showPassword}>
+              <PasswordEyeIcon visible={showPassword} />
+            </button>
+          </div>
         </Field>
 
         {(mode === 'register' || mode === 'reset') && (
           <Field id="auth-confirm-password" label="Xác nhận mật khẩu" error={fieldErrors.confirmPassword}>
-            <input
-              id="auth-confirm-password"
-              type="password"
-              required
-              minLength={6}
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              placeholder="••••••••"
-            />
+            <div className="password-input-wrap">
+              <input
+                id="auth-confirm-password"
+                type={showConfirmPassword ? 'text' : 'password'}
+                autoComplete="new-password"
+                required
+                minLength={6}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder={mode === 'reset' ? undefined : '••••••••'}
+              />
+              <button className="password-visibility-toggle" type="button" onClick={() => setShowConfirmPassword((visible) => !visible)} aria-label={showConfirmPassword ? 'Ẩn mật khẩu xác nhận' : 'Hiện mật khẩu xác nhận'} aria-pressed={showConfirmPassword}>
+                <PasswordEyeIcon visible={showConfirmPassword} />
+              </button>
+            </div>
           </Field>
         )}
 
@@ -176,4 +190,12 @@ export default function LoginPage() {
       )}
     </div>
   </section>;
+}
+
+function PasswordEyeIcon({ visible }) {
+  return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+    <circle cx="12" cy="12" r="3" />
+    {visible && <path d="m4 4 16 16" />}
+  </svg>;
 }
