@@ -38,7 +38,7 @@ function createApp(options) {
     if (process.env.NODE_ENV !== 'production' && req.headers.origin === frontendOrigin) {
       res.setHeader('Access-Control-Allow-Origin', frontendOrigin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
-      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
       res.vary('Origin');
       if (req.method === 'OPTIONS') return res.sendStatus(204);

@@ -14,6 +14,8 @@ function EntryRow({ entry, publicPage, displayName, onSaveChange }) {
   const [liked, setLiked] = useState(Boolean(entry.likedByMe));
   const [likeCount, setLikeCount] = useState(entry.likeCount || 0);
   const [saved, setSaved] = useState(Boolean(entry.savedByMe));
+  const [visibility, setVisibility] = useState(entry.visibility);
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
   const [actionError, setActionError] = useState('');
   const authorName = entry.author?.displayName || displayName || 'Người viết';
   const authorId = entry.author?._id;
@@ -38,6 +40,24 @@ function EntryRow({ entry, publicPage, displayName, onSaveChange }) {
       onSaveChange?.(entry._id, data.saved);
       setActionError('');
     } catch (error) { setActionError(error.message); }
+  }
+
+  async function toggleVisibility() {
+    if (visibilitySaving) return;
+    const nextVisibility = visibility === 'public' ? 'private' : 'public';
+    setVisibilitySaving(true);
+    setActionError('');
+    try {
+      const data = await api(`/api/entries/${entry._id}/visibility`, {
+        method: 'PATCH',
+        body: JSON.stringify({ visibility: nextVisibility })
+      });
+      setVisibility(data.entry.visibility);
+    } catch (error) {
+      setActionError(error.message);
+    } finally {
+      setVisibilitySaving(false);
+    }
   }
 
   if (publicPage) return <article className="entry-row public-entry-card">
@@ -77,10 +97,10 @@ function EntryRow({ entry, publicPage, displayName, onSaveChange }) {
     <div className="entry-row-body">
       <div className="entry-row-title">
         <h3><Link to={entryUrl}>{entry.title}</Link></h3>
-        <span className={`entry-visibility-note ${entry.visibility}`}>
-          <span aria-hidden="true">{entry.visibility === 'public' ? '◉' : '◌'}</span>
-          {entry.visibility === 'public' ? 'Công khai' : 'Riêng tư'}
-        </span>
+        <button type="button" className={`entry-visibility-note ${visibility}`} onClick={toggleVisibility} disabled={visibilitySaving} aria-label={`Chuyển bài viết sang ${visibility === 'public' ? 'riêng tư' : 'công khai'}`} title="Nhấn để đổi chế độ hiển thị">
+          <span aria-hidden="true">{visibility === 'public' ? '◉' : '◌'}</span>
+          {visibility === 'public' ? 'Công khai' : 'Riêng tư'}
+        </button>
         {entry.mood && (
           <span className="entry-row-mood">
             <span>đang cảm thấy</span>
@@ -91,6 +111,7 @@ function EntryRow({ entry, publicPage, displayName, onSaveChange }) {
       </div>
       {entry.author?._id && String(entry.author._id) !== String(user?.id) && <p className="entry-shared-by">Được chia sẻ bởi <Link to={`/people/${entry.author._id}`}>{authorName}</Link></p>}
       <p className="entry-excerpt">{entry.content}</p>
+      {actionError && <small className="social-action-error" role="alert">{actionError}</small>}
       {entry.tags?.length > 0 && <div className="entry-meta">{(entry.tags || []).map((tag) => <span className="tag" key={tag}>#{tag}</span>)}</div>}
     </div>
     <Link className="row-open" to={entryUrl} aria-label={`Mở bài ${entry.title}`}>↗</Link>

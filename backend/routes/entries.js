@@ -115,6 +115,23 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
+router.patch('/:id/visibility', async (req, res, next) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
+  const visibility = String(req.body?.visibility || '');
+  if (!['private', 'public'].includes(visibility)) {
+    return validationResponse(res, [{ field: 'visibility', message: 'Chế độ hiển thị không hợp lệ.' }]);
+  }
+  try {
+    const entry = await Entry.findOne({ _id: req.params.id, author: req.user._id });
+    if (!entry) return notFound(res);
+    entry.visibility = visibility;
+    await entry.save();
+    return res.json({ entry });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.put('/:id', async (req, res, next) => {
   if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
   try {

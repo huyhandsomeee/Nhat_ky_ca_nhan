@@ -805,7 +805,8 @@ h3 { font-size: var(--text-subtitle); line-height: 1.4; }
 .diary-entry-list .entry-date span { font-size: 25px; }
 .diary-entry-list .entry-date small { font-size: 14px; }
 .diary-entry-list .entry-row-title h3 { font-size: 19px; }
-.diary-entry-list .entry-visibility-note { display: inline-flex; align-items: center; gap: 4px; align-self: center; border: 1px solid #dce5de; border-radius: 999px; padding: 2px 7px; background: #f3f6f3; color: #63746a; font-size: 14px; line-height: 1.4; white-space: nowrap; }
+.diary-entry-list .entry-visibility-note { display: inline-flex; align-items: center; gap: 4px; align-self: center; border: 1px solid #dce5de; border-radius: 999px; padding: 2px 7px; background: #f3f6f3; color: #63746a; font: inherit; font-size: 14px; line-height: 1.4; white-space: nowrap; cursor: pointer; }
+.diary-entry-list .entry-visibility-note:disabled { opacity: .65; cursor: wait; }
 .diary-entry-list .entry-visibility-note.public { border-color: #c7ddc9; background: #eef6ed; color: #436b4c; }
 .diary-entry-list .entry-visibility-note.private { border-color: #dce2de; background: #f3f5f3; color: #66756c; }
 .diary-entry-list .entry-excerpt { margin-top: 6px; font-size: 14px; line-height: 1.65; -webkit-line-clamp: 3; }
