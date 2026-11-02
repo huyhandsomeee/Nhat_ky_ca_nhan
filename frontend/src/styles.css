@@ -97,6 +97,19 @@ button { color: inherit; }
 .follow-button.following { background: #eaf1e9; }
 .follow-button:disabled { opacity: .6; cursor: default; }
 .follow-button small { color: var(--muted); }
+.block-control { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.block-button { display: inline-flex; align-items: center; border: 1px solid #dfc6c6; border-radius: 999px; padding: 6px 10px; background: transparent; color: #8d4c4c; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.block-button.blocked { border-color: #b9cdbb; background: #eaf1e9; color: var(--moss-deep); }
+.block-button:disabled { opacity: .6; cursor: default; }
+.block-error { color: #a33333; font-size: 12px; }
+.blocked-users-page { width: min(900px, 100%); margin: 0 auto; padding: 24px 0 60px; }
+.blocked-users-page > .back-link { display: inline-flex; margin-bottom: 16px; }
+.blocked-users-list { display: grid; gap: 10px; margin: 18px 0 0; padding: 0; list-style: none; }
+.blocked-user-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid var(--line); border-radius: 12px; padding: 13px 16px; background: var(--paper); }
+.blocked-user-identity { display: flex; align-items: center; gap: 10px; min-width: 0; color: inherit; text-decoration: none; }
+.blocked-user-identity > span:last-child { display: grid; gap: 2px; }
+.blocked-user-identity small { color: var(--muted); }
+.blocked-users-shortcut { display: block; margin-top: 12px; }
 .privacy-note { background: #f1f6f1; }
 .privacy-note strong { font-family: var(--font-sans); font-size: 17px; }
 .result-count { color: var(--muted); font-size: 14px; }

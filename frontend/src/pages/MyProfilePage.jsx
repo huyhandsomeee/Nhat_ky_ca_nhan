@@ -96,6 +96,7 @@ export default function MyProfilePage() {
         <div className="profile-preview-heading"><UserAvatar src={user?.avatarUrl} name={displayName} /><div><strong>{displayName || 'Biệt danh của bạn'}</strong><small className="profile-username">@{user?.username}</small></div></div>
         <p>{bio || 'Phần giới thiệu sẽ xuất hiện tại đây.'}</p>
         <Link className="text-link" to={`/people/${user?.id}`}>Xem trang công khai</Link>
+        <Link className="text-link blocked-users-shortcut" to="/blocked">Danh sách đã chặn</Link>
       </aside>
     </div>
   </section>;

@@ -4,6 +4,7 @@ import { api } from '../api';
 import { EntryList } from '../components/EntryList';
 import { EmptyState, InlineError, Loading, UserAvatar } from '../components/ui';
 import FollowButton from '../components/FollowButton';
+import BlockButton from '../components/BlockButton';
 
 export default function PublicProfilePage() {
   const { id } = useParams();
@@ -27,7 +28,7 @@ export default function PublicProfilePage() {
     <Link className="back-link" to="/explore">← Góc chia sẻ</Link>
     <header className="public-profile-header">
       <UserAvatar src={profile.avatarUrl} name={profile.displayName} className="profile-avatar-large" />
-      <div className="public-profile-identity"><p className="eyebrow">Người viết</p><h1>{profile.displayName}</h1><p className="profile-username">@{profile.username}</p>{profile.bio && <p>{profile.bio}</p>}<div className="public-profile-stats"><span><strong>{profile.publicEntryCount || 0}</strong> bài công khai</span><FollowButton authorId={profile.id} /></div>
+      <div className="public-profile-identity"><p className="eyebrow">Người viết</p><h1>{profile.displayName}</h1><p className="profile-username">@{profile.username}</p>{profile.bio && <p>{profile.bio}</p>}<div className="public-profile-stats"><span><strong>{profile.publicEntryCount || 0}</strong> bài công khai</span><FollowButton authorId={profile.id} /><BlockButton authorId={profile.id} /></div>
       </div>
     </header>
     <section className="content-section" aria-labelledby="profile-entries-heading">
@@ -35,4 +36,4 @@ export default function PublicProfilePage() {
       {entries.length ? <EntryList entries={entries} publicPage /> : <EmptyState title="Chưa có bài viết công khai." body="Những trang được chia sẻ sẽ xuất hiện ở đây." />}
     </section>
   </section>;
-}
+}  

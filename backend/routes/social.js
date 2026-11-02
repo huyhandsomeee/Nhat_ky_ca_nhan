@@ -5,7 +5,10 @@ const SavedEntry = require('../models/SavedEntry');
 const Follow = require('../models/Follow');
 const EntryLike = require('../models/EntryLike');
 const Notification = require('../models/Notification');
+const Block = require('../models/Block');
+const User = require('../models/User');
 const { requireAuth, requireProfile } = require('../middleware/auth');
+const { getHiddenAuthors, isBlockRelationship } = require('../domain/blockAccess');
 
 const router = express.Router();
 router.use(requireAuth, requireProfile);
@@ -15,7 +18,9 @@ router.get('/saved', async (req, res, next) => {
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
     const limit = Math.min(50, Math.max(1, Number.parseInt(req.query.limit, 10) || 20));
     const saved = await SavedEntry.find({ user: req.user._id }).sort({ createdAt: -1 }).populate({ path: 'entry', match: { visibility: 'public' }, populate: { path: 'author', select: 'displayName avatarPath' } }).skip((page - 1) * limit).limit(limit + 1);
-    const rows = saved.filter((item) => item.entry);
+    const blockedAuthorIds = await getHiddenAuthors(req.user._id);
+    const blockedSet = new Set(blockedAuthorIds.map(String));
+    const rows = saved.filter((item) => item.entry && !blockedSet.has(String(item.entry.author?._id)));
     const hasMore = rows.length > limit;
     const visible = rows.slice(0, limit);
     const ids = visible.map((item) => item.entry._id);
@@ -42,11 +47,49 @@ router.delete('/entries/:id/save', async (req, res, next) => saveEntry(req, res,
 async function saveEntry(req, res, next, enabled) {
   if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
   try {
-    const entry = await Entry.findOne({ _id: req.params.id, visibility: 'public' }).select('_id');
+    const entry = await Entry.findOne({ _id: req.params.id, visibility: 'public' }).select('_id author');
     if (!entry) return notFound(res);
+    if (await isBlockRelationship(req.user._id, entry.author)) return notFound(res);
     if (enabled) await SavedEntry.updateOne({ user: req.user._id, entry: entry._id }, { $setOnInsert: { user: req.user._id, entry: entry._id } }, { upsert: true });
     else await SavedEntry.deleteOne({ user: req.user._id, entry: entry._id });
     return res.json({ saved: enabled });
+  } catch (error) { return next(error); }
+}
+
+router.get('/authors/:id/block', async (req, res, next) => {
+  if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
+  try {
+    const blocked = await Block.exists({ blocker: req.user._id, blocked: req.params.id });
+    return res.json({ blocked: Boolean(blocked) });
+  } catch (error) { return next(error); }
+});
+router.get('/blocks', async (req, res, next) => {
+  try {
+    const rows = await Block.find({ blocker: req.user._id })
+      .populate('blocked', 'displayName username avatarPath')
+      .sort({ createdAt: -1 });
+    return res.json({ users: rows.filter((row) => row.blocked).map((row) => ({
+      id: row.blocked._id,
+      displayName: row.blocked.displayName || 'Người viết',
+      username: row.blocked.username,
+      avatarPath: row.blocked.avatarPath
+    })) });
+  } catch (error) { return next(error); }
+});
+router.post('/authors/:id/block', async (req, res, next) => toggleBlock(req, res, next, true));
+router.delete('/authors/:id/block', async (req, res, next) => toggleBlock(req, res, next, false));
+async function toggleBlock(req, res, next, enabled) {
+  if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
+  try {
+    if (String(req.user._id) === req.params.id) {
+      return res.status(400).json({ error: { code: 'INVALID_ACTION', message: 'Bạn không thể chặn chính mình.' } });
+    }
+    if (!await User.exists({ _id: req.params.id })) return notFound(res);
+    if (enabled) {
+      await Block.updateOne({ blocker: req.user._id, blocked: req.params.id }, { $setOnInsert: { blocker: req.user._id, blocked: req.params.id } }, { upsert: true });
+      await Follow.deleteMany({ $or: [{ follower: req.user._id, author: req.params.id }, { follower: req.params.id, author: req.user._id }] });
+    } else await Block.deleteOne({ blocker: req.user._id, blocked: req.params.id });
+    return res.json({ blocked: enabled });
   } catch (error) { return next(error); }
 }
 
@@ -66,6 +109,7 @@ async function toggleFollow(req, res, next, enabled) {
   if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
   try {
     if (String(req.user._id) === req.params.id) return res.status(400).json({ error: { code: 'INVALID_ACTION', message: 'Bạn không thể theo dõi chính mình.' } });
+    if (await isBlockRelationship(req.user._id, req.params.id)) return notFound(res);
     const authorExists = await Entry.exists({ author: req.params.id, visibility: 'public' });
     if (!authorExists) return notFound(res);
     if (enabled) {

@@ -84,6 +84,7 @@ export default function Header() {
         <Link to="/explore">Góc chia sẻ</Link>
         {user && !user.needsProfileSetup && <Link to="/my-diary">Sổ của tôi</Link>}
         {user && !user.needsProfileSetup && <Link to="/saved">Bài đã lưu</Link>}
+        {user && !user.needsProfileSetup && <Link to="/blocked">Đã chặn</Link>}
       </nav>
       <div className="header-actions">
         {user && !user.needsProfileSetup && <div className="notification-area">

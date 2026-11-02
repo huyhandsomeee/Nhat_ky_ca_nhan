@@ -8,6 +8,7 @@ const { moodsByDateFromLatestEntries, summarizeMoodWeek } = require('../domain/m
 const { buildDateTagFilter, isCalendarDate } = require('../domain/entrySearch');
 const { requireAuth, requireProfile } = require('../middleware/auth');
 const { MOODS, validateEntryInput, normalizeEntryInput, canDeleteComment } = require('../domain/entryRules');
+const { getHiddenAuthors, removeHiddenReactions } = require('../domain/blockAccess');
 
 const router = express.Router();
 router.use(requireAuth, requireProfile);
@@ -108,7 +109,9 @@ router.get('/:id', async (req, res, next) => {
     const entry = await Entry.findOne({ _id: req.params.id, author: req.user._id })
       .populate('author', 'username displayName avatarPath');
     if (!entry) return notFound(res);
-    const comments = await Comment.find({ entry: entry._id }).populate('author', 'displayName').populate('reactions.user', 'displayName').sort({ createdAt: 1 });
+    const hiddenAuthors = await getHiddenAuthors(req.user._id);
+    const comments = await Comment.find({ entry: entry._id, author: { $nin: hiddenAuthors } }).populate('author', 'displayName').populate('reactions.user', 'displayName').sort({ createdAt: 1 });
+    removeHiddenReactions(comments, hiddenAuthors);
     return res.json({ entry, comments });
   } catch (error) {
     return next(error);

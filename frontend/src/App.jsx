@@ -12,6 +12,7 @@ import PublicProfilePage from './pages/PublicProfilePage';
 import LoginPage from './pages/LoginPage';
 import SavedEntriesPage from './pages/SavedEntriesPage';
 import WritersPage from './pages/WritersPage';
+import BlockedUsersPage from './pages/BlockedUsersPage';
 
 export default function App() {
   return <BrowserRouter><AuthProvider><AppRoutes /></AuthProvider></BrowserRouter>;
@@ -31,6 +32,7 @@ function AppRoutes() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/setup-profile" element={<PrivateRoute><ProfileSetupPage /></PrivateRoute>} />
         <Route path="/profile" element={<PrivateRoute><MyProfilePage /></PrivateRoute>} />
+        <Route path="/blocked" element={<PrivateRoute><BlockedUsersPage /></PrivateRoute>} />
         <Route path="/my-diary" element={<PrivateRoute><MyDiaryPage /></PrivateRoute>} />
         <Route path="/saved" element={<PrivateRoute><SavedEntriesPage /></PrivateRoute>} />
         <Route path="/entries/new" element={<PrivateRoute><EntryFormPage /></PrivateRoute>} />

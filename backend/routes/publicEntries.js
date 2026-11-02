@@ -6,12 +6,20 @@ const Notification = require('../models/Notification');
 const EntryLike = require('../models/EntryLike');
 const SavedEntry = require('../models/SavedEntry');
 const Follow = require('../models/Follow');
+const { getHiddenAuthors, isBlockRelationship, removeHiddenReactions } = require('../domain/blockAccess');
 const { buildDateTagFilter, isCalendarDate } = require('../domain/entrySearch');
 const { buildVietnameseSearchPattern, escapeRegex } = require('../domain/vietnameseSearch');
 const { requireAuth, requireProfile } = require('../middleware/auth');
 const { canInteractWithEntry, normalizeReaction } = require('../domain/entryInteractionRules');
 
 const router = express.Router();
+
+router.use(async (req, _res, next) => {
+  try {
+    req.blockedAuthorIds = await getHiddenAuthors(req.user?._id);
+    next();
+  } catch (error) { next(error); }
+});
 
 router.get('/', async (req, res, next) => {
   try {
@@ -33,15 +41,16 @@ router.get('/', async (req, res, next) => {
       if (validAuthor) filter.$and = [{ author: validAuthor }];
     } else if (followingFeed) filter.author = { $in: [] };
     else if (validAuthor) filter.author = validAuthor;
+    restrictBlockedAuthors(filter, req.blockedAuthorIds);
     const [entries, totalEntries, totalPublic, authorIds] = await Promise.all([Entry.find(filter)
       .populate('author', 'displayName username avatarPath')
       .sort(sort)
       .skip((page - 1) * limit)
-      .limit(limit + 1), Entry.countDocuments(filter), Entry.countDocuments({ visibility: 'public' }), Entry.distinct('author', { visibility: 'public' })]);
+      .limit(limit + 1), Entry.countDocuments(filter), Entry.countDocuments({ visibility: 'public', author: { $nin: req.blockedAuthorIds } }), Entry.distinct('author', { visibility: 'public', author: { $nin: req.blockedAuthorIds } })]);
     const hasMore = entries.length > limit;
     if (hasMore) entries.pop();
     const previewGroups = entries.length ? await Comment.aggregate([
-      { $match: { entry: { $in: entries.map((entry) => entry._id) }, parentComment: null, deleted: { $ne: true } } },
+      { $match: { entry: { $in: entries.map((entry) => entry._id) }, author: { $nin: req.blockedAuthorIds }, parentComment: null, deleted: { $ne: true } } },
       { $sort: { createdAt: -1 } },
       { $lookup: { from: 'users', localField: 'author', foreignField: '_id', as: 'commentAuthor' } },
       { $unwind: '$commentAuthor' },
@@ -70,7 +79,7 @@ router.get('/', async (req, res, next) => {
       EntryLike.aggregate([{ $match: { entry: { $in: ids } } }, { $group: { _id: '$entry', count: { $sum: 1 }, liked: { $sum: req.user?._id ? { $cond: [{ $eq: ['$user', req.user._id] }, 1, 0] } : 0 } } }]),
       req.user?._id ? SavedEntry.find({ user: req.user._id, entry: { $in: ids } }).distinct('entry') : [],
       req.user?._id ? Follow.find({ follower: req.user._id, author: { $in: authorIds } }).distinct('author') : [],
-      Comment.aggregate([{ $match: { entry: { $in: ids }, deleted: { $ne: true } } }, { $group: { _id: '$entry', count: { $sum: 1 } } }])
+      Comment.aggregate([{ $match: { entry: { $in: ids }, author: { $nin: req.blockedAuthorIds }, deleted: { $ne: true } } }, { $group: { _id: '$entry', count: { $sum: 1 } } }])
     ]);
     const likeMap = new Map(likes.map((item) => [String(item._id), item]));
     const savedSet = new Set(saves.map(String));
@@ -95,6 +104,7 @@ async function toggleLike(req, res, next, enabled) {
   try {
     const entry = await Entry.findOne({ _id: req.params.id, visibility: 'public' }).select('author');
     if (!entry) return notFound(res);
+    if (await isBlockRelationship(req.user?._id, entry.author)) return notFound(res);
     if (enabled) {
       const result = await EntryLike.updateOne({ entry: entry._id, user: req.user._id }, { $setOnInsert: { entry: entry._id, user: req.user._id } }, { upsert: true });
       if (result.upsertedCount > 0) {
@@ -110,7 +120,7 @@ async function toggleLike(req, res, next, enabled) {
 router.get('/tags/suggestions', async (req, res, next) => {
   try {
     const query = String(req.query.q || '').trim().replace(/^#+/, '').slice(0, 30);
-    const pipeline = [{ $match: { visibility: 'public' } }, { $unwind: '$tags' }];
+    const pipeline = [{ $match: { visibility: 'public', author: { $nin: req.blockedAuthorIds } } }, { $unwind: '$tags' }];
     if (query) pipeline.push({ $match: { tags: { $regex: escapeRegex(query), $options: 'i' } } });
     pipeline.push(
       { $group: { _id: '$tags', uses: { $sum: 1 } } },
@@ -126,13 +136,13 @@ router.get('/writers', async (req, res, next) => {
   try {
     const showAll = req.query.all === 'true';
     const [writers, writerIds] = await Promise.all([Entry.aggregate([
-      { $match: { visibility: 'public' } },
+      { $match: { visibility: 'public', author: { $nin: req.blockedAuthorIds } } },
       { $group: { _id: '$author', publicEntryCount: { $sum: 1 } } },
       { $sort: { publicEntryCount: -1, _id: 1 } },
       ...(!showAll ? [{ $limit: 3 }] : []),
       { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } }, { $unwind: '$user' },
       { $project: { _id: 1, displayName: { $ifNull: ['$user.displayName', 'Người viết'] }, username: '$user.username', avatarPath: '$user.avatarPath', publicEntryCount: 1 } }
-    ]), Entry.distinct('author', { visibility: 'public' })]);
+    ]), Entry.distinct('author', { visibility: 'public', author: { $nin: req.blockedAuthorIds } })]);
     return res.json({ writers, totalWriters: writerIds.length });
   } catch (error) { return next(error); }
 });
@@ -145,7 +155,7 @@ router.get('/authors', async (req, res, next) => {
       { 'user.username': { $regex: escapeRegex(query), $options: 'i' } }
     ] } : null;
     const pipeline = [
-      { $match: { visibility: 'public' } }, { $group: { _id: '$author', publicEntryCount: { $sum: 1 } } },
+      { $match: { visibility: 'public', author: { $nin: req.blockedAuthorIds } } }, { $group: { _id: '$author', publicEntryCount: { $sum: 1 } } },
       { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } }, { $unwind: '$user' }
     ];
     if (match) pipeline.push({ $match: match });
@@ -157,13 +167,14 @@ router.get('/authors', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   if (!mongoose.isValidObjectId(req.params.id)) return notFound(res);
   try {
-    const entry = await Entry.findOne({ _id: req.params.id, visibility: 'public' })
+    const entry = await Entry.findOne({ _id: req.params.id, visibility: 'public', author: { $nin: req.blockedAuthorIds } })
       .populate('author', 'displayName username bio avatarPath');
     if (!entry) return notFound(res);
-    const comments = await Comment.find({ entry: entry._id })
+    const comments = await Comment.find({ entry: entry._id, author: { $nin: req.blockedAuthorIds } })
       .populate('author', 'displayName avatarPath')
       .populate('reactions.user', 'displayName')
       .sort({ createdAt: 1 });
+    removeHiddenReactions(comments, req.blockedAuthorIds);
     const [likeCount, likedByMe, savedByMe] = await Promise.all([
       EntryLike.countDocuments({ entry: entry._id }),
       req.user?._id ? EntryLike.exists({ entry: entry._id, user: req.user._id }) : false,
@@ -184,11 +195,11 @@ router.post('/:id/comments', requireAuth, requireProfile, async (req, res, next)
   }
 
   try {
-    const entry = await Entry.findOne({ _id: req.params.id, visibility: 'public' });
+    const entry = await Entry.findOne({ _id: req.params.id, visibility: 'public', author: { $nin: req.blockedAuthorIds } });
     if (!entry) return notFound(res);
     if (parentCommentId && !mongoose.isValidObjectId(parentCommentId)) return notFound(res);
     const parentComment = parentCommentId
-      ? await Comment.findOne({ _id: parentCommentId, entry: entry._id }).select('author')
+      ? await Comment.findOne({ _id: parentCommentId, entry: entry._id, author: { $nin: req.blockedAuthorIds } }).select('author')
       : null;
     if (parentCommentId && !parentComment) return notFound(res);
     const comment = await Comment.create({ content, parentComment: parentCommentId, entry: entry._id, author: req.user._id });
@@ -218,9 +229,9 @@ router.post('/:id/comments/:commentId/reactions', requireAuth, requireProfile, a
   const emoji = req.body?.emoji === null ? null : normalizeReaction(req.body?.emoji);
   if (req.body?.emoji !== null && !emoji) return res.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'Biểu tượng cảm xúc không được hỗ trợ.' } });
   try {
-    const entry = await Entry.findOne({ _id: req.params.id, visibility: 'public' });
+    const entry = await Entry.findOne({ _id: req.params.id, visibility: 'public', author: { $nin: req.blockedAuthorIds } });
     if (!entry || !canInteractWithEntry(entry)) return notFound(res);
-    const comment = await Comment.findOne({ _id: req.params.commentId, entry: entry._id, deleted: false });
+    const comment = await Comment.findOne({ _id: req.params.commentId, entry: entry._id, author: { $nin: req.blockedAuthorIds }, deleted: false });
     if (!comment) return notFound(res);
     const previousEmoji = comment.reactions.find((reaction) => String(reaction.user) === String(req.user._id))?.emoji;
     comment.reactions = comment.reactions.filter((reaction) => String(reaction.user) !== String(req.user._id));
@@ -241,12 +252,20 @@ router.post('/:id/comments/:commentId/reactions', requireAuth, requireProfile, a
     }
     await comment.populate('author', 'displayName avatarPath');
     await comment.populate('reactions.user', 'displayName');
+    removeHiddenReactions([comment], req.blockedAuthorIds);
     return res.json({ comment });
   } catch (error) { return next(error); }
 });
 
 function notFound(res) {
   return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Không tìm thấy bài viết.' } });
+}
+
+function restrictBlockedAuthors(filter, blockedAuthorIds) {
+  if (!blockedAuthorIds?.length) return;
+  const authorCondition = filter.author;
+  filter.author = { $nin: blockedAuthorIds };
+  if (authorCondition) filter.$and = [...(filter.$and || []), { author: authorCondition }];
 }
 
 module.exports = router;
